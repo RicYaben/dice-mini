@@ -10,18 +10,22 @@ class Repository:
 
     def _query(self, table: str, **kwargs) -> pd.DataFrame:
         q = f"SELECT * FROM {table}"
-        ops = []
-        options = []
+        clauses = []
+        params = []
 
         for k, val in kwargs.items():
-            options.append(val)
-            op = "=="
-            if type(val) == list:
-                op = "IN"
-            ops.append(f"WHERE {k} {op} ?")
+            if isinstance(val, list):
+                placeholders = ", ".join(["?"] * len(val))
+                clauses.append(f"{k} IN ({placeholders})")
+                params.extend(val)
+            else:
+                clauses.append(f"{k} = ?")
+                params.append(val)
 
-        q = " ".join([q, " AND ".join(ops)])
-        return self._con.sql(q, params=options).df()
+        if clauses:
+            q += " WHERE " + " AND ".join(clauses)
+
+        return self._con.execute(q, params).df()
     
     def _rebuild_records_view(self) -> None:
         tables = self._con.execute("""
@@ -34,14 +38,19 @@ class Repository:
         union_sql = " UNION ALL ".join([f'SELECT * FROM "{t[0]}"' for t in tables])
         self._con.execute(f"CREATE OR REPLACE VIEW records AS {union_sql}")
 
-    def get_fingerprints(self, hosts: list[str], **kwargs) -> pd.DataFrame:
+    def get_fingerprints(self, *host: str, **kwargs) -> pd.DataFrame:
         'query the repo for records'
-        kwargs["host"] = hosts
+        # select all hosts
+        if len(host):
+            kwargs["host"] = list(host)
         return self._query("fingerprints", **kwargs)
     
-    def get_records(self, hosts: list[str], **kwargs) -> pd.DataFrame:
+    def get_records(self, *host: str, **kwargs) -> pd.DataFrame:
         'query the repo for records'
-        kwargs["ip"] = hosts
+        # select all hosts
+        if len(host):
+            kwargs["ip"] = list(host)
+        
         return self._query("records", **kwargs)
     
     def summary(self) -> dict:
