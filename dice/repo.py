@@ -1,10 +1,14 @@
 import pandas as pd
 import duckdb
+import json
+import copy
 
 from dice.models import Source, Label, Fingerprint, FingerprintLabel
 from dice.helpers import new_collection
 
 class Repository:
+    _collection: duckdb.DuckDBPyRelation
+
     def __init__(self, con: duckdb.DuckDBPyConnection) -> None:
         self._con = con
 
@@ -37,6 +41,9 @@ class Repository:
 
         union_sql = " UNION ALL ".join([f'SELECT * FROM "{t[0]}"' for t in tables])
         self._con.execute(f"CREATE OR REPLACE VIEW records AS {union_sql}")
+
+    def get_connection(self) -> duckdb.DuckDBPyConnection:
+        return self._con
 
     def get_fingerprints(self, *host: str, **kwargs) -> pd.DataFrame:
         'query the repo for records'
@@ -78,6 +85,10 @@ class Repository:
     
     def add_records(self, tab: str, records: pd.DataFrame) -> None:
         'add a new records table to the db and rebuild the view'
+        for col in records.select_dtypes(include="object"):
+            if records[col].apply(lambda x: isinstance(x, (dict, list))).any():
+                records[col] = records[col].apply(json.dumps)
+
         records.to_sql(tab, self._con, index=False)
         self._rebuild_records_view()
 
@@ -98,6 +109,15 @@ class Repository:
         'label hosts. The dataframe is a dict of label_id and host_id'
         c = new_collection(*fp_lab)
         c.to_df().to_sql("fingerprint_labels", self._con, if_exists="append", index=False)
+
+    def with_view(self, name: str, q: str) -> 'Repository':
+        c = copy.copy(self)
+        self._con.sql(f"CREATE OR REPLACE VIEW {name} AS {q}")
+        c._collection = self._con.sql(f"SELECT * FROM {name}")
+        return c
+
+    def collect(self) -> pd.DataFrame:
+        return self._collection.df()
 
 def load_repository(sources: list[Source], db: str|None=None) -> Repository:
     '''

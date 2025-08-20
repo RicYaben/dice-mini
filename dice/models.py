@@ -45,7 +45,11 @@ class Fingerprint(Model):
     # name of the module that created the fingerprint
     module_name: str
     # data, is a dict
-    data: bytes
+    data: str
+
+    # port and protocol from the record
+    port: int
+    protocol: str
     
 @dataclass
 class Label(Model):

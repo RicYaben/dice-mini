@@ -33,13 +33,15 @@ def new_label(module_name: str, name: str, description: str ="-", mitigaton: str
         module_name=module_name
     )
 
-def new_fingerprint(module: str, host: str, record: str, data: bytes) -> Fingerprint:
+def new_fingerprint(module: str, host: str, record: str, data: str, protocol: str = "-", port: int = -1) -> Fingerprint:
     return Fingerprint(
         id=f"{module}_{str(uuid4())}",
         host=host,
         record_id=record,
         module_name=module,
-        data=data
+        data=data,
+        port=port,
+        protocol=protocol
     )
 
 def new_fp_label(fingerprint: str, label: str) -> FingerprintLabel:
@@ -55,3 +57,6 @@ class Collection:
 
 def new_collection(*items: Model) -> Collection:
     return Collection(list(items))
+
+def load_sources(*fpaths: str, name: str="-") -> list[Source]:
+    return [new_source(name, p) for p in fpaths]

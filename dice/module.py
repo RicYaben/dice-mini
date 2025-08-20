@@ -118,3 +118,22 @@ class ComponentFactory:
 
 def new_component_factory(t: str, name: str) -> ComponentFactory:
     return ComponentFactory(t, name)
+
+def make_component(t: str, preffix: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit) -> Component:
+    fact = new_component_factory(t, "-".join([preffix, "comp"]))
+    return fact.make_component(
+        fact.make_signature(
+            "-".join([preffix, "sig"]), 
+            fact.make_module(
+                "-".join([preffix, "mod"]),
+                handler,
+                init
+            )
+        )
+    )
+
+def new_fingerprinter(handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "cls") -> Component:
+    return make_component(M_CLASSIFIER, preffix, handler, init)
+
+def new_classifier(handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "fp") -> Component:
+    return make_component(M_FINGERPRINTER, preffix, handler, init)

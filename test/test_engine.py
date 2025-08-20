@@ -27,8 +27,9 @@ def test_fignerprinter_module(r: repo.Repository) -> None:
     records = r.get_records()
     fps = []
     for _, record in records.iterrows():
-        data = {"port": record["port"]}
-        fp = helpers.new_fingerprint("test", record["ip"], record["id"], pickle.dumps(data))
+        port = record["port"]
+        data = {"port": port}
+        fp = helpers.new_fingerprint("test", record["ip"], record["id"], pickle.dumps(data), port=port)
         fps.append(fp)
 
     r.fingerprint(*fps)
@@ -49,7 +50,7 @@ class TestEngine(unittest.TestCase):
             )
         )
 
-        c_fact_fp = module.new_component_factory(module.M_CLASSIFIER, "fp-comp")
+        c_fact_fp = module.new_component_factory(module.M_FINGERPRINTER, "fp-comp")
         cmp_fp = c_fact_fp.make_component(
             c_fact_fp.make_signature(
                 "fp-sig", 

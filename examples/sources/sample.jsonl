@@ -1,0 +1,4 @@
+{"ip":"2.2.2.2","port":1,"data":{"sample":{"status":"success","protocol":"sample", "vendor": "vendor-1", "product": "prod-1", "version": "v1.0"}}}
+{"ip":"1.1.1.1","port":1,"data":{"sample":{"status":"success","protocol":"sample", "vendor": "vendor-1", "product": "prod-2", "version": "v1.0"}}}
+{"ip":"1.1.1.2","port":1,"data":{"sample":{"status":"success","protocol":"sample", "vendor": "vendor-2", "product": "prod-1", "version": "v2.0"}}}
+{"ip":"1.1.1.3","port":1,"data":{"sample":{"status":"success","protocol":"sample", "vendor": "vendor-2", "product": "prod-2", "version": "v1.0"}}}
