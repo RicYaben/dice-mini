@@ -1,73 +1,33 @@
 import unittest
-import pickle
 
-from dice import repo, helpers, module
+import dice
+from dice import module
 from test import test_tools
 
-class TestClassifier:
-    def __init__(self) -> None:
-        self.lab = helpers.new_label("test", "test-label")
-    def get_init(self) -> module.ModuleInit:
-        def init(r: repo.Repository):
-            r.add_labels(self.lab)
-        return init
+def test_cls_handler(mod: module.Module) -> None:
+    fingerprints = mod.repo().get_fingerprints()
+    for _, fp in fingerprints.iterrows():
+        mod.label(fp["id"], "test-label")
     
-    def get_handler(self) -> module.ModuleHandler:
-        def handler(r: repo.Repository) -> None:
-            fingerprints = r.get_fingerprints()
-            fp_labs = []
-            for _, fp in fingerprints.iterrows():
-                fp_labs.append(helpers.new_fp_label(fp["id"], self.lab.id))
+def test_cls_init(mod: module.Module):
+    mod.register_label("test-label")
 
-                r.label(*fp_labs)
-            return
-        return handler
-
-def test_fignerprinter_module(r: repo.Repository) -> None:
-    records = r.get_records()
-    fps = []
-    for _, record in records.iterrows():
-        port = record["port"]
-        data = {"port": port}
-        fp = helpers.new_fingerprint("test", record["ip"], record["id"], pickle.dumps(data), port=port)
-        fps.append(fp)
-
-    r.fingerprint(*fps)
-    return
+def test_fignerprinter_module(mod: module.Module) -> None:
+    records = mod.repo().get_records()
+    for _, rec in records.iterrows():
+        data = {"test": "test"}
+        mod.fingerprint(rec, data, protocol="tets")
 
 class TestEngine(unittest.TestCase):
     def test_engine(self):
-        cl = TestClassifier()
-        c_fact_cls = module.new_component_factory(module.M_CLASSIFIER, "cls-comp")
-        cmp_cls = c_fact_cls.make_component(
-            c_fact_cls.make_signature(
-                "cls-sig", 
-                c_fact_cls.make_module(
-                    "cls-mod", 
-                    cl.get_handler(),
-                    cl.get_init()
-                )
-            )
-        )
-
-        c_fact_fp = module.new_component_factory(module.M_FINGERPRINTER, "fp-comp")
-        cmp_fp = c_fact_fp.make_component(
-            c_fact_fp.make_signature(
-                "fp-sig", 
-                c_fact_fp.make_module(
-                    "fp-mod", 
-                    test_fignerprinter_module
-                )
-            )
-        )
+        cmp_cls = dice.new_classifier(test_cls_handler, test_cls_init)
+        cmp_fp = dice.new_fingerprinter(test_fignerprinter_module)
 
         engine = module.new_engine(cmp_fp, cmp_cls)
         srcs, clean = test_tools.make_test_sources()
         try:
             repo = engine.run(srcs)
             s = repo.summary()
-
-            # evaluate
             self.assertEqual(s, {"fingerprinted": 2, "labelled": 2})
         finally:
             clean()

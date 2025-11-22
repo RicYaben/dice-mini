@@ -1,0 +1,75 @@
+from dice.config import MFACTORY
+from dice.module import new_component_manager
+from dice.module import load_registry
+from dice.modules import registry as dr
+
+import dice
+import typer
+
+def parse_command(cmd: str):
+    ts = MFACTORY.all()
+    mc = MFACTORY.get(cmd)
+    return ts[ts.index(mc):]
+
+run_app = typer.Typer(help="DICE mini runner")
+
+@run_app.command()
+def run(
+        command: str | None = typer.Argument(None, help="components to use"),
+        components: str = typer.Option(
+            None, 
+            "-C",
+            "--components",
+            help="list of components to load"
+        ),
+        modules: str = typer.Option(
+            "*", 
+            "-M",
+            "--modules",
+            help="modules to load"
+        ),
+        database: str | None = typer.Option(
+            None, 
+            "-db",
+            "--database",
+            help="path to database"
+        ),
+        id: str = typer.Option(
+            "-", 
+            "--id",
+            help="assign an ID to results"
+        ),
+        info: bool = typer.Option(
+            False, 
+            "--info",
+            help="mock run"
+        ),
+        registry: str | None = typer.Option(
+            "./mods",
+            "--registry",
+            help="Path to the directory containing module resitry"
+        ),
+    ):
+    if not (command or components):
+        raise Exception("command or componets required. DICE needs to know what to do")
+    
+    mods = [mod.strip() for mod in modules.split(",") if mod.strip()] if modules else []
+    comps = [c.strip() for c in components.split(",") if c.strip()] if components else []
+    cc = parse_command(command) if command else [MFACTORY.get(c) for c in comps]
+
+    manager = new_component_manager(id)
+    manager.add(*dr.all())
+
+    # plugin modules
+    if registry and (reg := load_registry(registry)):
+        rmods = reg.all()
+        manager.add(*rmods)
+
+    cb = manager.build(types=cc, modules=mods)
+    engine = dice.new_engine(*cb)
+    if info:
+        manager.info()
+        engine.info()
+        return
+    engine.run(db=database)
+    

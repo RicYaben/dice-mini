@@ -14,7 +14,7 @@ def make_test_sources() -> tuple[list[models.Source], Callable]:
         )
     
     # takes a name of the source and a path to a file
-    src = helpers.new_source("zgrab2", fpath)
+    src = helpers.new_source("zgrab2", fpath, "-")
     return ([src], tmpdir.cleanup)
 
 def load_test_repository() -> repo.Repository:

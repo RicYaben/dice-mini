@@ -1,5 +1,5 @@
 import unittest
-import pickle
+import json
 
 from test import test_tools
 from dice.helpers import new_label, new_fingerprint, new_fp_label
@@ -26,7 +26,7 @@ class TestRepository(unittest.TestCase):
         fps = []
         for _, record in records.iterrows():
             data = {"port": record["port"]}
-            fp = new_fingerprint("test", record["ip"], record["id"], pickle.dumps(data))
+            fp = new_fingerprint("test", record["ip"], record["id"], json.dumps(data))
             fps.append(fp)
 
         repo.fingerprint(*fps)
