@@ -37,8 +37,8 @@ where = ["src"]
 include = ["dice", "dice.*", "commands", "commands.*"]
 
 [project.urls]
-Homepage = "https://gitlab.gbar.dtu.dk/cyber-deception/mini-dice"
-Issues = "https://gitlab.gbar.dtu.dk/cyber-deception/mini-dice/issues"
+Homepage = "https://github.com/RicYaben/dice-mini"
+Issues = "https://github.com/RicYaben/dice-mini/issues"
 
 [project.scripts]
 dice-mini = "commands.main:main"
