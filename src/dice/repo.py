@@ -4,6 +4,7 @@ from typing import Any, Generator, Callable
 
 import pandas as pd
 import duckdb
+from tqdm import tqdm
 import ujson
 import copy
 import uuid
@@ -26,21 +27,8 @@ def with_items(*objs) -> pd.DataFrame:
 def save(con, name: str, df: pd.DataFrame, bsize: int = DEFAULT_BSIZE):
     if df.empty:
         return
-    
     df.to_sql(name, con, if_exists="append", index=False, method="multi", chunksize=bsize)
 
-# def save(con, name: str, df: pd.DataFrame, bsize: int = DEFAULT_BSIZE):
-#     cols = list(df.columns)
-#     placeholders = ", ".join(["?"] * len(cols))
-#     sql = f"INSERT INTO {name} ({', '.join(cols)}) VALUES ({placeholders})"
-
-#     print(f"saving {name}...")
-#     cursor = con.cursor()
-#     for start in range(0, len(df), bsize):
-#         batch = df.iloc[start:start+bsize]
-#         cursor.executemany(sql, batch.itertuples(index=False, name=None))
-#         con.commit()
-#     print(f"saved")
 
 def normalize_data(df: pd.DataFrame, prefix: str="") -> pd.DataFrame:
     # cannot parse
@@ -303,15 +291,9 @@ class Repository:
         tab = f"records_{src.name}_{src.id}"
         con = self.get_connection()
 
-        print(f"inserting {src.name} records into {tab}")
-        
-        for i, c in enumerate(chain([peek], c_gen), start=1):
+        print(f"inserting {src.name} records into {tab} ({src.batch_size}/b)")
+        for  c in tqdm(chain([peek], c_gen)):
             save(con, tab, self._fmt(c, oc, ic), src.batch_size)
-            # chain and other iterators keep a reference to the items, preventing gc
-            if i % 10 == 0:
-                print(f"[{src.name}] {i} batches inserted...")
-                gc.collect()
-
             del c
         self._rebuild_records_view()
     # ---

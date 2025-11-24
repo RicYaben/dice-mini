@@ -45,6 +45,7 @@ class Module:
         return self._init(self)
 
     def handle(self) -> None:
+        print(f"[{self.name}]")
         return self._handler(self)
     
     def repo(self) -> Repository:
@@ -278,10 +279,13 @@ class ComponentManager:
                 comps.append(c)
         return comps
 
-    def get_modules(self, t: MType, modules: list[str]=["*"]) -> list[Module]:
+    def get_modules(self, t: MType | None = None, modules: list[str]=["*"]) -> list[Module]:
         m: list[Module] = []
 
-        fmods = list(filter(lambda m: m.m_type == t, self._modules))
+        fmods = self._modules
+        if t:
+            fmods = list(filter(lambda m: m.m_type == t, self._modules))
+
         for mod in fmods:
             for p in modules:
                 if fnmatch.fnmatch(mod.name, p):
@@ -296,7 +300,14 @@ class ComponentManager:
             mods[str(mod.m_type).upper()].append(mod.name)
 
         print("Registered modules:")
-        print(tabulate(mods, headers="keys", tablefmt="github"))
+        print(tabulate(mods, headers="keys", tablefmt="rounded_outline"))
+
+    def list_modules(self, modules: list[str] = ["*"]) -> None:
+        mods = defaultdict(list)
+        for m in self.get_modules(modules=modules):
+            mods[str(m.m_type).upper()].append(m.name)
+
+        print(tabulate(mods, headers="keys", tablefmt="rounded_outline"))
 
 def new_component_manager(study: str) -> ComponentManager:
     return ComponentManager(study)
@@ -348,11 +359,4 @@ def load_registry(p: str):
     sys.path.insert(0, str(pp.parent))  # parent of modules
     
     registry = import_module(pp.name)
-    print(registry)
     return registry.REGISTRY
-
-    # name = pp.stem  # e.g., registry.py -> registry
-    # if spec := spec_from_file_location(name, str(pp)):
-    #     mod = module_from_spec(spec)
-    #     spec.loader.exec_module(mod) # type: ignore
-    #     return getattr(mod, "REGISTRY", None)

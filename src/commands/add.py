@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple
+from typing import List
 import typer
 from dice.repo import load_repository
 from dice.helpers import make_sources
@@ -39,7 +39,7 @@ def parse_source(entry: str):
     return (fpath, name, study)
 
 @insert_app.command()
-def insert(
+def add(
     source: List[str] = typer.Option(
         [], 
         "-s", 
