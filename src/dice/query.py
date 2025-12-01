@@ -114,22 +114,22 @@ def parse_clause(clause: str, value: Any) -> str:
         if not isinstance(value, (list, tuple)) or len(value) != 2:
             raise ValueError("BETWEEN operator requires a 2-element list/tuple")
         low, high = value
-        return f"{field} BETWEEN {low} AND {high}"
+        return f'"{field}" BETWEEN {low} AND {high}'
 
     # IN
     if isinstance(value, list):
         vals = ", ".join(
-            f"'{v}'" if isinstance(v, str) else str(v)
+            f'"{v}"' if isinstance(v, str) else str(v)
             for v in value
         )
-        return f"{field} IN ({vals})"
+        return f'"{field}" IN ({vals})'
 
     # String
     if isinstance(value, str):
-        return f"{field} {modifier} '{value}'"
+        return f'"{field}" {modifier} "{value}"'
 
     # Numeric (let DuckDB infer type)
-    return f"{field} {modifier} {value}"
+    return f'"{field}" {modifier} {value}'
     
 def with_clauses(q: str, clauses: dict | None = None) -> str:
     qc = ""
@@ -147,17 +147,22 @@ def query_db(db: str, **clauses) -> str:
 def query_records(source: str, **clauses) -> str:
     return query_db(f"records_{source}", **clauses)
 
-def query_zmap_ports(**clauses) -> str:
-    '''Get the list of responding ports according to ZMap results'''
-
+def query_serv_ports(**clauses) -> str:
     return with_clauses("""
-    SELECT 
-        z.addr AS ip, 
-        LIST(z.dport) AS ports,
-        COUNT(z.dport) AS count,
-    FROM records_zmap AS z
+        SELECT
+        f.host,
+        COUNT(DISTINCT f.port) AS fpcount,
+        COUNT(DISTINCT z.sport) AS zpcount,
+        LIST(DISTINCT f.port) as fports,
+        LIST(DISTINCT z.sport) as zports,
+    FROM fingerprints AS f
+    LEFT JOIN records_zmap AS z
+        ON f.host = z.saddr
+        -- remove tnis, our study contains traces of HART-IP, OPC UA, and S7
+        AND z.sport NOT IN (102, 4840, 5094)
     {clauses}
-    GROUP BY z.addr;
+    GROUP BY f.host
+    ORDER BY zports DESC
     """, clauses)
 
 def query_prefix_hosts(**clauses) -> str:

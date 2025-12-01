@@ -1,21 +1,30 @@
+import uuid
 import pandas as pd
+from dice.config import DEFAULT_BSIZE
 from dice.loaders import Loader
-from dataclasses import dataclass, asdict
+from dataclasses import KW_ONLY, dataclass, asdict, field
 
 from abc import ABC
 from typing import Generator
 
 @dataclass
 class Model(ABC):
+    _: KW_ONLY
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
     def to_dict(self) -> dict:
         return asdict(self)
-
+    
+    @classmethod
+    def primary_key(cls) -> tuple[str, ...]:
+        return ("id",)
+    
+    @classmethod
+    def table(cls) -> str:
+        raise NotImplementedError
 
 @dataclass
 class Source(Model):
-    # ID of this source. Useful to distinguish between datasets
-    # Example: query for all records from source zgrab2 with ID study-1
-    id: str
     # name of the source, e.g., zgrab2
     name: str
     # id of the study
@@ -23,31 +32,39 @@ class Source(Model):
     # path to the source: a list of directories, or files. Accepts globs.
     # Example: "dir/*/*.jsonl"
     paths: list[str]
-    # size of the batches for loading and saving
-    batch_size: int
 
     # an explicit loader to use for this source
     _handler: Loader
-    
+
+    # size of the batches for loading and saving
+    _batch_size: int = DEFAULT_BSIZE
+
+    @classmethod
+    def table(cls) -> str:
+        return "sources"
 
     def load(self) -> Generator[pd.DataFrame, None, None]:
-        return self._handler(self.id, self.name, self.study, self.paths, self.batch_size)
+        return self._handler(self.id, self.name, self.study, self.paths, self._batch_size)
     
 @dataclass
 class Host(Model):
-    # ID of the host
-    id: str
     # address of the host
     ip: str
     domain: str
     # prefix
     prefix: str
     asn: str
+
+    @classmethod
+    def primary_key(cls):
+        return ("ip",)
+    
+    @classmethod
+    def table(cls) -> str:
+        return "hosts"
     
 @dataclass
 class Fingerprint(Model):
-    # ID of the fingerprint
-    id: str
     # ID of the host
     host: str
     # ID of the record related to
@@ -60,11 +77,17 @@ class Fingerprint(Model):
     # port and protocol from the record
     port: int
     protocol: str
+
+    @classmethod
+    def primary_key(cls):
+        return ("record_id", "module_name")
+    
+    @classmethod
+    def table(cls) -> str:
+        return "fingerprints"
     
 @dataclass
 class Label(Model):
-    # ID of the label
-    id: str
     # name of the label
     name: str
     # short descriptor
@@ -76,6 +99,14 @@ class Label(Model):
     # name of the module that created this label
     module_name: str
 
+    @classmethod
+    def primary_key(cls):
+        return ("name", "module_name")
+    
+    @classmethod
+    def table(cls) -> str:
+        return "labels"
+
 @dataclass
 class FingerprintLabel(Model):
     # ID of the fingerprint
@@ -83,12 +114,27 @@ class FingerprintLabel(Model):
     # ID of the label
     label_id: str
 
+    @classmethod
+    def primary_key(cls):
+        return ("fingerprint_id", "label_id")
+    
+    @classmethod
+    def table(cls) -> str:
+        return "fingerprint_labels"
+
 @dataclass
 class Tag(Model):
-    id: str
     name: str
     description: str
     module_name: str
+
+    @classmethod
+    def primary_key(cls):
+        return ("name", "module_name")
+    
+    @classmethod
+    def table(cls) -> str:
+        return "tags"
 
 @dataclass
 class HostTag(Model):
@@ -101,3 +147,11 @@ class HostTag(Model):
     # Protocol and Port (optional)
     protocol: str
     port: int
+
+    @classmethod
+    def primary_key(cls):
+        return ("host", "tag_id")
+    
+    @classmethod
+    def table(cls) -> str:
+        return "host_tags"

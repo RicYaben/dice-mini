@@ -1,7 +1,7 @@
 import typer
 from dice.module import new_component_manager
 from dice.module import load_registry
-from dice.modules import registry as dr
+from dice.modules import registry as core
 
 modules_app = typer.Typer(help="Check registered modules")
 
@@ -14,18 +14,17 @@ def list(
         help="Comma separated list of modules"
     ),
     registry: str | None = typer.Option(
-        "./mods",
+        "./modules",
         "--registry",
         help="Path to the directory containing module resitry"
     ),
 ) -> None:
     manager = new_component_manager("-")
-    manager.add(*dr.all())
+    manager.register(core)
 
     # plugin modules
     if registry and (reg := load_registry(registry)):
-        rmods = reg.all()
-        manager.add(*rmods)
+        manager.register(reg)
 
     modules = m.split(",")
-    manager.list_modules(modules=modules)
+    manager.info(modules=modules)

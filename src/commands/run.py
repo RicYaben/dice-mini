@@ -1,7 +1,7 @@
 from dice.config import MFACTORY
 from dice.module import new_component_manager
 from dice.module import load_registry
-from dice.modules import registry as dr
+from dice.modules import registry as core
 
 import dice
 import typer
@@ -45,7 +45,7 @@ def run(
             help="mock run"
         ),
         registry: str | None = typer.Option(
-            "./mods",
+            "./modules",
             "--registry",
             help="Path to the directory containing module resitry"
         ),
@@ -58,17 +58,16 @@ def run(
     cc = parse_command(command) if command else [MFACTORY.get(c) for c in comps]
 
     manager = new_component_manager(id)
-    manager.add(*dr.all())
+    manager.register(core)
 
     # plugin modules
     if registry and (reg := load_registry(registry)):
-        rmods = reg.all()
-        manager.add(*rmods)
+        manager.register(reg)
 
     cb = manager.build(types=cc, modules=mods)
     engine = dice.new_engine(*cb)
     if info:
-        manager.info()
+        manager.info(mods)
         engine.info()
         return
     engine.run(db=database)

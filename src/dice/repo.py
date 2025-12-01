@@ -1,17 +1,17 @@
 from collections import defaultdict
 from itertools import chain
 from typing import Any, Generator, Callable
+from tqdm import tqdm
 
 import pandas as pd
 import duckdb
-from tqdm import tqdm
 import ujson
 import copy
 import uuid
 import queue
-import gc
+import hashlib
 
-from dice.models import HostTag, Source, Label, Fingerprint, FingerprintLabel, Tag
+from dice.models import Source
 from dice.helpers import new_collection
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
 
@@ -24,11 +24,55 @@ type RecordsWrapper = Callable[[Any], pd.DataFrame]
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
 
-def save(con, name: str, df: pd.DataFrame, bsize: int = DEFAULT_BSIZE):
+def hash_row(row: pd.Series, keys: tuple[str, ...]) -> int:
+    """Compute deterministic integer hash of the primary key columns."""
+    values = [str(row[k]) for k in keys]
+    return int(hashlib.md5("||".join(values).encode("utf-8")).hexdigest(), 16)
+
+def save(con, table: str, df: pd.DataFrame, primary_key: str | tuple[str, ...] = "id", force: bool = False, bsize: int = DEFAULT_BSIZE):
     if df.empty:
         return
-    df.to_sql(name, con, if_exists="append", index=False, method="multi", chunksize=bsize)
 
+    # normalize primary_key to tuple
+    if isinstance(primary_key, str):
+        primary_key = (primary_key,)
+
+    if not force:
+        # compute hash for each row in the DataFrame
+        df["_pk_hash"] = df.apply(lambda r: hash_row(r, primary_key), axis=1)
+
+        try:
+            # construct a VALUES table of the batch hashes
+            values_clause = ", ".join(f"({h})" for h in df["_pk_hash"])
+            # select only hashes that do NOT exist in the DB
+            query = f"""
+            WITH batch_hashes(hash) AS (
+                VALUES {values_clause}
+            )
+            SELECT hash
+            FROM batch_hashes
+            WHERE hash NOT IN (
+                SELECT CAST(hash_md5({', '.join(primary_key)}) AS BIGINT)
+                FROM {table}
+            )
+            """
+            # fetch the hashes that are not in the DB
+            new_hashes_df = con.execute(query).fetchdf()
+
+        except duckdb.CatalogException:
+            # table does not exist yet, insert everything
+            df.drop(columns="_pk_hash").to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
+            return
+
+        # filter DataFrame to only new rows
+        new_hashes = set(new_hashes_df["hash"])
+        new_rows = df[df["_pk_hash"].isin(new_hashes)].drop(columns="_pk_hash")
+    else:
+        new_rows = df
+
+    if not new_rows.empty:
+        new_rows.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
+        
 
 def normalize_data(df: pd.DataFrame, prefix: str="") -> pd.DataFrame:
     # cannot parse
@@ -291,37 +335,21 @@ class Repository:
         tab = f"records_{src.name}_{src.id}"
         con = self.get_connection()
 
-        print(f"inserting {src.name} records into {tab} ({src.batch_size}/b)")
+        print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
         for  c in tqdm(chain([peek], c_gen)):
-            save(con, tab, self._fmt(c, oc, ic), src.batch_size)
+            save(con, tab, self._fmt(c, oc, ic), bsize=src._batch_size)
             del c
         self._rebuild_records_view()
-    # ---
 
-    def _add_items(self, *items: Any, name: str) -> None:
-        save(self.get_connection(), df=with_items(*items), name=name)
+    def save_models(self, *items: Any) -> None:
+        if not items:
+            return
+        pkey = items[0].primary_key()
+        table = items[0].table()
+        save(self.get_connection(), df=with_items(*items), primary_key=pkey, table=table)
 
     def add_hosts(self, hosts: pd.DataFrame) -> None:
-        save(self.get_connection(), df=hosts, name="hosts")
-    
-    def add_labels(self, *label: Label) -> None:
-        'create new labels in the database'
-        self._add_items(*label, name="labels")
-
-    def add_tags(self, *tag: Tag) -> None:
-        self._add_items(*tag, name="tags")
-
-    def fingerprint(self, *fingerprint: Fingerprint) -> None:
-        'fingerprint hosts. The dataframe is a collection of fingerprints'
-        self._add_items(*fingerprint, name="fingerprints")
-
-    def label(self, *fp_lab: FingerprintLabel) -> None:
-        'label fingerprint. The dataframe is a dict of label_id and host_id'
-        self._add_items(*fp_lab, name="fingerprint_labels")
-
-    def tag(self, *host_tag: HostTag) -> None:
-        'tag a host'
-        self._add_items(*host_tag, name="host_tags")
+        save(self.get_connection(), df=hosts, primary_key="ip", table="hosts")
 
     def with_view(self, name: str, q: str) -> 'Repository':
         c = copy.copy(self)
