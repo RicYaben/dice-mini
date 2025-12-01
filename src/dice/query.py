@@ -119,14 +119,14 @@ def parse_clause(clause: str, value: Any) -> str:
     # IN
     if isinstance(value, list):
         vals = ", ".join(
-            f'"{v}"' if isinstance(v, str) else str(v)
+            f"'{v}'" if isinstance(v, str) else str(v)
             for v in value
         )
         return f'"{field}" IN ({vals})'
 
     # String
     if isinstance(value, str):
-        return f'"{field}" {modifier} "{value}"'
+        return f'"{field}" {modifier} \'{value}\''
 
     # Numeric (let DuckDB infer type)
     return f'"{field}" {modifier} {value}'
@@ -147,9 +147,12 @@ def query_db(db: str, **clauses) -> str:
 def query_records(source: str, **clauses) -> str:
     return query_db(f"records_{source}", **clauses)
 
-def query_serv_ports(**clauses) -> str:
-    return with_clauses("""
-        SELECT
+def query_serv_ports(zpcount_limit: int | None = None) -> str:
+    limit_clause = ""
+    if zpcount_limit:
+        limit_clause = f"HAVING COUNT(DISTINCT z.sport) > {zpcount_limit}"
+    return """
+    SELECT
         f.host,
         COUNT(DISTINCT f.port) AS fpcount,
         COUNT(DISTINCT z.sport) AS zpcount,
@@ -160,10 +163,10 @@ def query_serv_ports(**clauses) -> str:
         ON f.host = z.saddr
         -- remove tnis, our study contains traces of HART-IP, OPC UA, and S7
         AND z.sport NOT IN (102, 4840, 5094)
-    {clauses}
     GROUP BY f.host
+    {clause}
     ORDER BY zports DESC
-    """, clauses)
+    """.format(clause = limit_clause)
 
 def query_prefix_hosts(**clauses) -> str:
     return with_clauses("""

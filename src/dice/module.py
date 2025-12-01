@@ -36,17 +36,23 @@ class Module:
     _labels: dict[str,Label] = field(default_factory=dict)
     _tags: dict[str,Tag] = field(default_factory=dict)
 
-    # cache
-    _cache: dict[str, Any] = field(default_factory=dict)
+    # cache, temporarely stores items
+    _cache: list = field(default_factory=list)
     
     def init(self, repo: Repository) -> None:
         self._repo = repo
-        self._add = repo.save_models
         return self._init(self)
+
+    def flush(self) -> None:
+        'flushes remaining items in the cache'
+        repo = self.repo()
+        repo.save_models(*self._cache)
+        self._cache = []
 
     def handle(self) -> None:
         print(f"[{self.name}]")
-        return self._handler(self)
+        self._handler(self)
+        self.flush()
     
     def repo(self) -> Repository:
         if not self._repo:
@@ -55,52 +61,20 @@ class Module:
     
     def query(self, q: str) -> Generator[Any, None, None]:
         return self.repo().query(q)
-    
-    def make_handler(self, itemize, orient: str = 'records'):
-        def records_handler(df: pd.DataFrame):
-            items = []
-            for r in df.itertuples(index=False):
-                if item := itemize(r):
-                    items.append(item)
-            return items
-        def batch_handler(df: pd.DataFrame):
-            return itemize(df)
-        return records_handler if orient == "records" else batch_handler
-
-    def itemize(self, q: str, itemizer, orient: str= "records", pbar: bool=True) -> None:
-        t, gen = self.repo().queryb(q)
-        handler = self.make_handler(itemizer, orient)
-
-        def with_pbar(total, batches):
-            with tqdm(total=total, desc=f"{self.name}") as pbar:
-                for b in batches:
-                    items = handler(b)
-                    self.save(*items)
-
-                    pbar.update(len(b.index))
-                    del b
- 
-        if pbar:
-            with_pbar(t, gen)
-            return
-        
-        for b in gen:
-            items = handler(b)
-            self.save(*items)
-            del b
 
     def register_label(self, name: str, short: str="-", description: str="-", mitigation: str = "-"):
         lab = new_label(self.name, name, short,description, mitigation)
         self._labels[name] = lab
         self.repo().save_models(lab)
 
+    def register_tag(self, name: str, description: str="-") -> None:
+        tag = new_tag(self.name, name, description)
+        self._tags[name] = tag
+        self.repo().save_models(tag)
+
     def make_label(self, fp: str, lab: str) -> FingerprintLabel:
         l = self._labels[lab]
         return new_fp_label(fp, l.id)
-
-    def label(self, fp: str, lab: str) -> None:
-        flab = self.make_label(fp, lab)
-        self.repo().save_models(flab)
 
     def make_fingerprint(self, rec: Any, data: dict, protocol: str="-") -> Fingerprint:
         data["probe_status"] = rec.get("data_status", "")
@@ -113,23 +87,12 @@ class Module:
             rec.get("port", -1)
         )
 
-    def register_tag(self, name: str, description: str="-") -> None:
-        tag = new_tag(self.name, name, description)
-        self._tags[name] = tag
-        self.repo().save_models(tag)
-
     def make_tag(self, host: str, tag:str, details: str="", protocol: str="-", port: int= -1) -> HostTag:
         t = self._tags[tag]
         return new_host_tag(host, t.id, details, protocol, port)
 
     def make_fp_tag(self, fp, tag:str, details: str="") -> HostTag:
         return self.make_tag(fp["ip"], tag, details, fp["protocol"], fp["port"])
-    
-    def cache(self, name: str, value: Any) -> None:
-        self._cache[name] = value
-    
-    def get_cache(self, name: str) -> Any:
-        return self._cache[name]
     
     def with_pbar(self, handler: Callable[[pd.DataFrame], None], q: str, bsize: int = DEFAULT_BSIZE) -> None:
         t, gen = self.repo().queryb(q)
@@ -140,8 +103,46 @@ class Module:
                 pbar.update(len(b.index))
                 del b
 
-    def save(self, *items) -> None:
-        return self.repo().save_models(*items)
+    def store(self, *items) -> None:
+        self._cache.extend(items)
+        if len(self._cache) >= DEFAULT_BSIZE: 
+            self.flush()
+
+    def itemize(self, q: str, itemizer, orient: str= "rows", pbar: bool=True) -> None:
+        '''
+        Orient:
+        - rows: a pd.series
+        - tuples: a pandas object
+        - dataframe: the whole df
+        '''
+        def iter_orient(orient: str):
+            match orient:
+                case "tuples":
+                    def tup(x: pd.DataFrame):
+                        for t in x.itertuples(index=False): itemizer(t)
+                    return tup
+                case "rows":
+                    def r(x: pd.DataFrame):
+                        for _, t in x.iterrows(): itemizer(t) 
+                    return r
+                case "dataframe":
+                    return lambda x: itemizer(x)
+                case _:
+                    raise ValueError(f"unknown orientation: {orient}")
+
+        t, gen = self.repo().queryb(q)
+        it = iter_orient(orient)
+        if not pbar:
+            for b in gen:
+                it(b)
+                del b
+
+        with tqdm(total=t, desc=f"{self.name}") as pbar:
+            for b in gen:
+                n = len(b.index)
+                it(b)
+                pbar.update(n)
+                del b
 
 @dataclass
 class Signature:
@@ -419,15 +420,11 @@ def new_component_manager(study: str) -> ComponentManager:
 
 def make_fp_handler(fp_cb: Callable[[pd.Series], dict | None], protocol: str="-", source: str = "zgrab2") -> ModuleHandler:
     def wrapper(mod: Module) -> None:
-        repo = mod.repo()
-        def handler(df: pd.DataFrame):
-            fps = []
-            for _,r in df.iterrows():
-                if fp := fp_cb(r):
-                    fps.append(mod.make_fingerprint(r, fp, protocol))
-            repo.save_models(*fps)
+        def handler(r):
+            if fp := fp_cb(r):
+                mod.store(mod.make_fingerprint(r, fp, protocol))
         q = query_records(source=source, protocol=protocol)
-        mod.with_pbar(handler, q)
+        mod.itemize(q, handler, orient="rows")
     return wrapper
 
 def make_cls_handler(cls_cb: Callable[[pd.Series], str | None], protocol="-") -> ModuleHandler:

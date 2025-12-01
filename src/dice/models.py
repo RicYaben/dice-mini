@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 import pandas as pd
 from dice.config import DEFAULT_BSIZE
@@ -11,6 +12,22 @@ from typing import Generator
 class Model(ABC):
     _: KW_ONLY
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    pk: str = field(init=False)
+    # TODO: add an index to rows based on their pk hash
+    # pk: str =
+
+    def __post_init__(self):
+        # Compute the PK hash from the PK fields returned by primary_key()
+        pk_fields = self.primary_key()
+
+        # Collect values in PK order
+        values = [str(getattr(self, f)) for f in pk_fields]
+
+        # Hash them deterministically
+        h = hashlib.sha256()
+        for v in values:
+            h.update(v.encode())
+        self.pk = h.hexdigest()
 
     def to_dict(self) -> dict:
         return asdict(self)

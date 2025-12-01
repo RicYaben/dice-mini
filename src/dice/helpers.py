@@ -78,6 +78,10 @@ def make_sources(*fpaths: str, name: str="-", study="-", batch_size: int= 50_000
 
 def get_record_field(r, field: str, default: Any=None, prefix: str="data_") -> Any:
     v = r.get(prefix+field, default)
+
+    if isinstance(v, (list, tuple)):
+        return default if len(v) == 0 else v
+    
     return v if not pd.isna(v) else default
 
 def record_to_dict(r, prefix: str="data_") -> dict:

@@ -29,47 +29,55 @@ def hash_row(row: pd.Series, keys: tuple[str, ...]) -> int:
     values = [str(row[k]) for k in keys]
     return int(hashlib.md5("||".join(values).encode("utf-8")).hexdigest(), 16)
 
-def save(con, table: str, df: pd.DataFrame, primary_key: str | tuple[str, ...] = "id", force: bool = False, bsize: int = DEFAULT_BSIZE):
+def save(
+    con,
+    table: str,
+    df: pd.DataFrame,
+    primary_key: str | tuple[str, ...] = "id",
+    force: bool = False,
+    bsize: int = DEFAULT_BSIZE,
+):
     if df.empty:
         return
 
-    # normalize primary_key to tuple
+    # normalize primary_key to tuple (still used for table creation, maybe)
     if isinstance(primary_key, str):
         primary_key = (primary_key,)
 
+    # ---- FORCE MODE: insert everything ----
     if force:
         df.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
         return
 
-    # compute hash for each row in the DataFrame
-    df["_pk_hash"] = df.apply(lambda r: hash_row(r, primary_key), axis=1)
+    # ---- Ensure PK hash column exists ----
+    if "pk" not in df.columns:
+        raise ValueError("DataFrame must contain a 'pk' primary-key hash column")
 
     try:
-        # construct a VALUES table of the batch hashes
-        values_clause = ", ".join(f"({h})" for h in df["_pk_hash"])
-        # select only hashes that do NOT exist in the DB
+        values_clause = ", ".join(f"('{h}')" for h in df["pk"])
+
         query = f"""
-        WITH batch_hashes(hash) AS (
+        WITH batch_hashes(pk) AS (
             VALUES {values_clause}
         )
-        SELECT hash
+        SELECT pk
         FROM batch_hashes
-        WHERE hash NOT IN (
-            SELECT CAST(hash_md5({', '.join(primary_key)}) AS BIGINT)
-            FROM {table}
+        WHERE pk NOT IN (
+            SELECT pk FROM {table}
         )
         """
-        # fetch the hashes that are not in the DB
+
+        # fetch hashes that are not in the DB
         new_hashes_df = con.execute(query).fetchdf()
 
     except duckdb.CatalogException:
-        # table does not exist yet, insert everything
-        df.drop(columns="_pk_hash").to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
+        # table does not exist → insert everything
+        df.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
         return
 
-    # filter DataFrame to only new rows
-    new_hashes = set(new_hashes_df["hash"])
-    new_rows = df[df["_pk_hash"].isin(new_hashes)].drop(columns="_pk_hash")
+    # ---- Filter only brand-new rows ----
+    new_hashes = set(new_hashes_df["pk"])
+    new_rows = df[df["pk"].isin(new_hashes)]
 
     if not new_rows.empty:
         new_rows.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
@@ -374,7 +382,8 @@ class Repository:
             break
 
     def query_batch(self, q, normalize: bool=True, bsize=DEFAULT_BSIZE) -> Generator[pd.DataFrame, None, None]:
-        cursor = self.get_connection().execute(q)
+        con = self.connector.new_connection()
+        cursor = con.execute(q)
         norm = normalize_records if normalize else lambda x: x
         
         for b in cursor.fetch_record_batch(bsize):
@@ -382,7 +391,8 @@ class Repository:
 
     def queryb(self, q, normalize: bool=True, bsize=DEFAULT_BSIZE) -> tuple[int, Generator[Any, None, None]]:
         dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
-        d = res[0] if (res:=self.get_connection().execute(dq).fetchone()) else 0
+        con = self.connector.new_connection()
+        d = res[0] if (res:=con.execute(dq).fetchone()) else 0 # <---- this destroys previous queries, so we need a new connection for it
         return d, self.query_batch(q, normalize, bsize)
 
 def load_repository(sources: list[Source] = [], db: str|None=None, read_only: bool = False) -> Repository:
