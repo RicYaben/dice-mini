@@ -37,38 +37,39 @@ def save(con, table: str, df: pd.DataFrame, primary_key: str | tuple[str, ...] =
     if isinstance(primary_key, str):
         primary_key = (primary_key,)
 
-    if not force:
-        # compute hash for each row in the DataFrame
-        df["_pk_hash"] = df.apply(lambda r: hash_row(r, primary_key), axis=1)
+    if force:
+        df.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
+        return
 
-        try:
-            # construct a VALUES table of the batch hashes
-            values_clause = ", ".join(f"({h})" for h in df["_pk_hash"])
-            # select only hashes that do NOT exist in the DB
-            query = f"""
-            WITH batch_hashes(hash) AS (
-                VALUES {values_clause}
-            )
-            SELECT hash
-            FROM batch_hashes
-            WHERE hash NOT IN (
-                SELECT CAST(hash_md5({', '.join(primary_key)}) AS BIGINT)
-                FROM {table}
-            )
-            """
-            # fetch the hashes that are not in the DB
-            new_hashes_df = con.execute(query).fetchdf()
+    # compute hash for each row in the DataFrame
+    df["_pk_hash"] = df.apply(lambda r: hash_row(r, primary_key), axis=1)
 
-        except duckdb.CatalogException:
-            # table does not exist yet, insert everything
-            df.drop(columns="_pk_hash").to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
-            return
+    try:
+        # construct a VALUES table of the batch hashes
+        values_clause = ", ".join(f"({h})" for h in df["_pk_hash"])
+        # select only hashes that do NOT exist in the DB
+        query = f"""
+        WITH batch_hashes(hash) AS (
+            VALUES {values_clause}
+        )
+        SELECT hash
+        FROM batch_hashes
+        WHERE hash NOT IN (
+            SELECT CAST(hash_md5({', '.join(primary_key)}) AS BIGINT)
+            FROM {table}
+        )
+        """
+        # fetch the hashes that are not in the DB
+        new_hashes_df = con.execute(query).fetchdf()
 
-        # filter DataFrame to only new rows
-        new_hashes = set(new_hashes_df["hash"])
-        new_rows = df[df["_pk_hash"].isin(new_hashes)].drop(columns="_pk_hash")
-    else:
-        new_rows = df
+    except duckdb.CatalogException:
+        # table does not exist yet, insert everything
+        df.drop(columns="_pk_hash").to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
+        return
+
+    # filter DataFrame to only new rows
+    new_hashes = set(new_hashes_df["hash"])
+    new_rows = df[df["_pk_hash"].isin(new_hashes)].drop(columns="_pk_hash")
 
     if not new_rows.empty:
         new_rows.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
