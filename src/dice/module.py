@@ -10,15 +10,24 @@ from dataclasses import dataclass, field
 from tabulate import tabulate
 from tqdm import tqdm
 
-from dice.config import CLASSIFIER, DEFAULT_BSIZE, FINGERPRINTER, MFACTORY, SCANNER, TAGGER, MType
+from dice.config import (
+    CLASSIFIER,
+    DEFAULT_BSIZE,
+    FINGERPRINTER,
+    MFACTORY,
+    SCANNER,
+    TAGGER,
+    MType,
+)
 from dice.query import query_db, query_records
 from dice.repo import Repository, load_repository
 from dice.models import Fingerprint, FingerprintLabel, HostTag, Source, Label, Tag
 from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
 
-type ModuleInit = Callable[['Module'], None]
-type ModuleHandler = Callable[['Module'], None]
+type ModuleInit = Callable[["Module"], None]
+type ModuleHandler = Callable[["Module"], None]
 type RecordHandler = Callable[[Any], Generator[Any, None, None]]
+
 
 @dataclass
 class Module:
@@ -26,25 +35,25 @@ class Module:
     m_type: MType
     # name of the module
     name: str
-    
+
     # just take a connection and do something to it
     _init: ModuleInit
     _handler: ModuleHandler
     _repo: Optional[Repository] = None
 
     # registered labels
-    _labels: dict[str,Label] = field(default_factory=dict)
-    _tags: dict[str,Tag] = field(default_factory=dict)
+    _labels: dict[str, Label] = field(default_factory=dict)
+    _tags: dict[str, Tag] = field(default_factory=dict)
 
     # cache, temporarely stores items
     _cache: list = field(default_factory=list)
-    
+
     def init(self, repo: Repository) -> None:
         self._repo = repo
         return self._init(self)
 
     def flush(self) -> None:
-        'flushes remaining items in the cache'
+        "flushes remaining items in the cache"
         repo = self.repo()
         repo.save_models(*self._cache)
         self._cache = []
@@ -53,48 +62,66 @@ class Module:
         print(f"[{self.name}]")
         self._handler(self)
         self.flush()
-    
+
     def repo(self) -> Repository:
         if not self._repo:
             raise Exception("repository not set")
         return self._repo
-    
+
     def query(self, q: str) -> Generator[Any, None, None]:
         return self.repo().query(q)
 
-    def register_label(self, name: str, short: str="-", description: str="-", mitigation: str = "-"):
-        lab = new_label(self.name, name, short,description, mitigation)
+    # ---- 
+    def register_label(
+        self, name: str, short: str = "-", description: str = "-", mitigation: str = "-"
+    ):
+        lab = new_label(self.name, name, short, description, mitigation)
         self._labels[name] = lab
         self.repo().save_models(lab)
 
-    def register_tag(self, name: str, description: str="-") -> None:
+    def register_tag(self, name: str, description: str = "-") -> None:
         tag = new_tag(self.name, name, description)
         self._tags[name] = tag
         self.repo().save_models(tag)
+    # ----
 
     def make_label(self, fp: str, lab: str) -> FingerprintLabel:
-        l = self._labels[lab]
-        return new_fp_label(fp, l.id)
+        slab = self._labels[lab]
+        return new_fp_label(fp, slab.id)
 
-    def make_fingerprint(self, rec: Any, data: dict, protocol: str="-") -> Fingerprint:
+    def make_fingerprint(
+        self, rec: Any, data: dict, protocol: str = "-"
+    ) -> Fingerprint:
         data["probe_status"] = rec.get("data_status", "")
         return new_fingerprint(
-            self.name, 
-            rec.get("ip", "-"), 
+            self.name,
+            rec.get("ip", "-"),
             rec.get("id", "-"),
             json.dumps(data),
             protocol,
-            rec.get("port", -1)
+            rec.get("port", -1),
         )
 
-    def make_tag(self, host: str, tag:str, details: str="", protocol: str="-", port: int= -1) -> HostTag:
+    def make_tag(
+        self,
+        host: str,
+        tag: str,
+        details: str = "",
+        protocol: str = "-",
+        port: int = -1,
+    ) -> HostTag:
         t = self._tags[tag]
         return new_host_tag(host, t.id, details, protocol, port)
 
-    def make_fp_tag(self, fp, tag:str, details: str="") -> HostTag:
+    def make_fp_tag(self, fp, tag: str, details: str = "") -> HostTag:
         return self.make_tag(fp["ip"], tag, details, fp["protocol"], fp["port"])
-    
-    def with_pbar(self, handler: Callable[[pd.DataFrame], None], q: str, bsize: int = DEFAULT_BSIZE) -> None:
+
+    def with_pbar(
+        self,
+        handler: Callable[[pd.DataFrame], None],
+        q: str,
+        bsize: int = DEFAULT_BSIZE,
+    ) -> None:
         t, gen = self.repo().queryb(q)
         with tqdm(total=t, desc=f"{self.name}") as pbar:
             pbar.write(f"fetching in batches ({bsize}/b)")
@@ -105,25 +132,34 @@ class Module:
 
     def store(self, *items) -> None:
         self._cache.extend(items)
-        if len(self._cache) >= DEFAULT_BSIZE: 
+        if len(self._cache) >= DEFAULT_BSIZE:
             self.flush()
 
-    def itemize(self, q: str, itemizer, orient: str= "rows", pbar: bool=True) -> None:
-        '''
+    def itemize(
+        self, q: str, itemizer, orient: str = "rows", pbar: bool = True
+    ) -> None:
+        """
         Orient:
         - rows: a pd.series
         - tuples: a pandas object
         - dataframe: the whole df
-        '''
+        """
+
         def iter_orient(orient: str):
             match orient:
                 case "tuples":
+
                     def tup(x: pd.DataFrame):
-                        for t in x.itertuples(index=False): itemizer(t)
+                        for t in x.itertuples(index=False):
+                            itemizer(t)
+
                     return tup
                 case "rows":
+
                     def r(x: pd.DataFrame):
-                        for _, t in x.iterrows(): itemizer(t) 
+                        for _, t in x.iterrows():
+                            itemizer(t)
+
                     return r
                 case "dataframe":
                     return lambda x: itemizer(x)
@@ -137,12 +173,13 @@ class Module:
                 it(b)
                 del b
 
-        with tqdm(total=t, desc=f"{self.name}") as pbar:
+        with tqdm(total=t, desc=f"{self.name}") as bar:
             for b in gen:
                 n = len(b.index)
                 it(b)
-                pbar.update(n)
+                bar.update(n)
                 del b
+
 
 @dataclass
 class Signature:
@@ -153,7 +190,7 @@ class Signature:
     # list of modules in the signature
     modules: list[Module]
 
-    def init(self, repo: Repository) -> 'Signature':
+    def init(self, repo: Repository) -> "Signature":
         for m in self.modules:
             m.init(repo)
         return self
@@ -162,9 +199,10 @@ class Signature:
         for m in self.modules:
             m.handle()
 
-    def add(self, *module: Module) -> 'Signature':
+    def add(self, *module: Module) -> "Signature":
         self.modules.extend(module)
         return self
+
 
 @dataclass
 class Component:
@@ -175,7 +213,7 @@ class Component:
     # list of signatures registered
     signatures: list[Signature]
 
-    def init(self, repo: Repository) -> 'Component':
+    def init(self, repo: Repository) -> "Component":
         for s in self.signatures:
             s.init(repo)
         return self
@@ -184,21 +222,27 @@ class Component:
         for s in self.signatures:
             s.handle()
 
-    def add(self, *signature: Signature) -> 'Component':
+    def add(self, *signature: Signature) -> "Component":
         self.signatures.extend(signature)
         return self
+
 
 @dataclass
 class Engine:
     # list of components registered
     components: list[Component]
 
-    def run(self, srcs: list[Source] = [], db: str | None =None, repo: Repository | None = None) -> Repository:
+    def run(
+        self,
+        srcs: list[Source] = [],
+        db: str | None = None,
+        repo: Repository | None = None,
+    ) -> Repository:
         # load all the sources
-        if not repo:    
+        if not repo:
             repo = load_repository(db=db)
         repo.add_sources(*srcs)
-        
+
         def fcomp(t):
             return lambda c: c.c_type == t
 
@@ -214,7 +258,7 @@ class Engine:
                     c.handle()
 
         return repo
-    
+
     def info(self) -> None:
         """
         Print engine info showing components, their type, signatures, and associated modules.
@@ -229,12 +273,9 @@ class Engine:
                     # get module path / collection if available
                     collection = getattr(mod, "collection", None)
                     module_name = f"{collection}:{mod.name}" if collection else mod.name
-                    rows.append([
-                        comp.name,
-                        str(comp.c_type).upper(),
-                        sig.name,
-                        module_name
-                    ])
+                    rows.append(
+                        [comp.name, str(comp.c_type).upper(), sig.name, module_name]
+                    )
 
         if not rows:
             print("No components found.")
@@ -261,18 +302,31 @@ class Engine:
             else:
                 last_sig = row[2]
 
-        print("\033[1mEngine information table.\033[0m  Includes loaded modules by components and signatures.")
-        print(tabulate(rows, headers=["Component", "Type", "Signature", "Module"], tablefmt="rounded_outline"))
-    
+        print(
+            "\033[1mEngine information table.\033[0m  Includes loaded modules by components and signatures."
+        )
+        print(
+            tabulate(
+                rows,
+                headers=["Component", "Type", "Signature", "Module"],
+                tablefmt="rounded_outline",
+            )
+        )
+
+
 def defaultModuleInit(_) -> None:
     pass
-    
-def new_module(t: MType, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit) -> Module:
+
+
+def new_module(
+    t: MType, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
+) -> Module:
     return Module(t, name, init, handler)
+
 
 # ---
 # def new_plugin(
-#         name: str, 
+#         name: str,
 #         scanner: Module | None = None,
 #         classifier: Module | None = None,
 #         fingerprinter: Module | None = None,
@@ -280,14 +334,18 @@ def new_module(t: MType, name: str, handler: ModuleHandler, init: ModuleInit = d
 #     ): raise NotImplementedError
 # ---
 
+
 def new_signature(t: MType, name: str, *modules: Module) -> Signature:
     return Signature(t, name, list(modules))
+
 
 def new_component(t: MType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
 
+
 def new_engine(*components: Component) -> Engine:
     return Engine(list(components))
+
 
 @dataclass
 class ComponentFactory:
@@ -297,58 +355,73 @@ class ComponentFactory:
 
     def make_signature(self, name: str, *module: Module) -> Signature:
         return new_signature(self.t, name, *module)
-    
-    def make_module(self, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit) -> Module:
+
+    def make_module(
+        self, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
+    ) -> Module:
         return new_module(self.t, name, handler, init)
-    
+
     def make_component(self, *signature: Signature) -> Component:
         return new_component(self.t, self.name, *signature)
+
 
 def new_component_factory(t: MType, name: str) -> ComponentFactory:
     return ComponentFactory(t, name)
 
-def make_component(t: MType, preffix: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit) -> Component:
+
+def make_component(
+    t: MType, preffix: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
+) -> Component:
     fact = new_component_factory(t, "-".join([preffix, "comp"]))
     return fact.make_component(
         fact.make_signature(
-            "-".join([preffix, "sig"]), 
-            fact.make_module(
-                "-".join([preffix, "mod"]),
-                handler,
-                init
-            )
+            "-".join([preffix, "sig"]),
+            fact.make_module("-".join([preffix, "mod"]), handler, init),
         )
     )
 
-def new_fingerprinter(handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "fp") -> Component:
+
+def new_fingerprinter(
+    handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "fp"
+) -> Component:
     return make_component(FINGERPRINTER, preffix, handler, init)
 
-def new_classifier(handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "cls") -> Component:
+
+def new_classifier(
+    handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "cls"
+) -> Component:
     return make_component(CLASSIFIER, preffix, handler, init)
+
 
 class ComponentManager:
     def __init__(self, name: str = "comp") -> None:
         self.name = name
         # registries registered
         self._registries: list[ModuleRegistry] = []
-    
-    def register(self, registry: 'ModuleRegistry') -> None:
+
+    def register(self, registry: "ModuleRegistry") -> None:
         self._registries.append(registry)
-    
+
     def find(self, modules: list[str] = ["*"]) -> list[tuple[str, Module]]:
         result: list[tuple[str, Module]] = []
+
         def matches_pattern(full_path_segments: list[str], pattern: str) -> bool:
             pat_segments = pattern.split(":")
             if len(pat_segments) == 1:
                 # single segment: match any segment or module
-                return any(fnmatch.fnmatch(seg, pat_segments[0]) for seg in full_path_segments)
+                return any(
+                    fnmatch.fnmatch(seg, pat_segments[0]) for seg in full_path_segments
+                )
             # multi-segment: check for sub-sequence match
             for i in range(len(full_path_segments) - len(pat_segments) + 1):
-                if all(fnmatch.fnmatch(full_path_segments[i + j], pat_segments[j]) for j in range(len(pat_segments))):
+                if all(
+                    fnmatch.fnmatch(full_path_segments[i + j], pat_segments[j])
+                    for j in range(len(pat_segments))
+                ):
                     return True
             return False
 
-        def collect(registry: 'ModuleRegistry', path: list[str] = []):
+        def collect(registry: "ModuleRegistry", path: list[str] = []):
             full_path = path + [registry.name]
             for m in registry.modules:
                 full_path_with_module = full_path + [m.name]
@@ -369,16 +442,20 @@ class ComponentManager:
             collect(reg)
 
         return result
-    
-    def get_modules(self, t: MType | None = None, modules: list[str] = ["*"]) -> list[Module]:
+
+    def get_modules(
+        self, t: MType | None = None, modules: list[str] = ["*"]
+    ) -> list[Module]:
         found = self.find(modules)
-        found = [m for _,m in found if m.m_type == t]
+        found = [m for _, m in found if m.m_type == t]
 
         # Deduplicate
         uniq = {id(m): m for m in found}
         return list(uniq.values())
-    
-    def build(self, types: list[MType] = MFACTORY.all(), modules: list[str] = ["*"]) -> list[Component]:
+
+    def build(
+        self, types: list[MType] = MFACTORY.all(), modules: list[str] = ["*"]
+    ) -> list[Component]:
         comps = []
         for t in types:
             if mods := self.get_modules(t, modules):
@@ -410,64 +487,89 @@ class ComponentManager:
             else:
                 last_type = row[1]
 
-        print("\033[1mRegistry information table.\033[0m  Includes matching available modules.")
+        print(
+            "\033[1mRegistry information table.\033[0m  Includes matching available modules."
+        )
         if modules != ["*"]:
-            print(f'Queries: {", ".join(modules)}')
-        print(tabulate(rows, headers=["Collection", "Type", "Module"], tablefmt="rounded_outline"))
+            print(f"Queries: {', '.join(modules)}")
+        print(
+            tabulate(
+                rows,
+                headers=["Collection", "Type", "Module"],
+                tablefmt="rounded_outline",
+            )
+        )
+
 
 def new_component_manager(study: str) -> ComponentManager:
     return ComponentManager(study)
 
-def make_fp_handler(fp_cb: Callable[[pd.Series], dict | None], protocol: str="-", source: str = "zgrab2") -> ModuleHandler:
+
+def make_fp_handler(
+    fp_cb: Callable[[pd.Series], dict | None],
+    protocol: str = "-",
+    source: str = "zgrab2",
+) -> ModuleHandler:
     def wrapper(mod: Module) -> None:
         def handler(r):
             if fp := fp_cb(r):
                 mod.store(mod.make_fingerprint(r, fp, protocol))
+
         q = query_records(source=source, protocol=protocol)
         mod.itemize(q, handler, orient="rows")
+
     return wrapper
 
-def make_cls_handler(cls_cb: Callable[[pd.Series], str | None], protocol="-") -> ModuleHandler:
+
+def make_cls_handler(
+    cls_cb: Callable[[pd.Series], str | None], protocol="-"
+) -> ModuleHandler:
     def wrapper(mod: Module) -> None:
         repo = mod.repo()
+
         def handler(df: pd.DataFrame):
             labs = []
-            for _,fp in df.iterrows():
+            for _, fp in df.iterrows():
                 if lab := cls_cb(fp):
                     labs.append(mod.make_label(str(fp["id"]), lab))
             repo.save_models(*labs)
+
         q = query_db("fingerprints", protocol=protocol)
         mod.with_pbar(handler, q)
+
     return wrapper
+
 
 class ModuleRegistry:
     def __init__(self, name: str = "custom") -> None:
         self.name = name
         self.modules: list[Module] = []
-        self.children: dict[str, 'ModuleRegistry'] = {}
+        self.children: dict[str, "ModuleRegistry"] = {}
 
-    def add(self, *module: Module) -> 'ModuleRegistry':
+    def add(self, *module: Module) -> "ModuleRegistry":
         self.modules.extend(module)
         return self
-    
-    def add_group(self, group: 'ModuleRegistry', name: str | None = None) -> 'ModuleRegistry':
+
+    def add_group(
+        self, group: "ModuleRegistry", name: str | None = None
+    ) -> "ModuleRegistry":
         if not name:
             name = group.name
         self.children[name] = group
         return self
-    
-    def add_groups(self, groups: list['ModuleRegistry']) -> 'ModuleRegistry':
+
+    def add_groups(self, groups: list["ModuleRegistry"]) -> "ModuleRegistry":
         for g in groups:
             self.add_group(g)
         return self
-        
+
     def all(self) -> list[Module]:
         mods = []
         for g in self.children.values():
             mods.extend(g.all())
         mods.extend(self.modules)
         return mods
-    
+
     def find(self, path: str) -> list[Module]:
         parts = path.split(":", 1)
 
@@ -485,20 +587,22 @@ class ModuleRegistry:
         reg, mod = parts
         if fnmatch.fnmatch(self.name, reg):
             return [m for m in self.modules if fnmatch.fnmatch(m.name, mod)]
-        
+
         # otherwise recurse
         mods = []
         for ch in self.children.values():
             mods.extend(ch.find(path))
         return mods
-    
+
+
 def new_registry(name: str) -> ModuleRegistry:
     registry = ModuleRegistry(name)
     return registry
 
+
 def load_registry(p: str):
     pp = pathlib.Path(p).resolve()
     sys.path.insert(0, str(pp.parent))  # parent of modules
-    
+
     registry = import_module(pp.name)
     return registry.registry

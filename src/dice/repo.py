@@ -17,17 +17,20 @@ from dice.config import DEFAULT_BSIZE, DATA_PREFIX
 
 import warnings
 
-warnings.simplefilter(action='ignore', category=UserWarning)
+warnings.simplefilter(action="ignore", category=UserWarning)
 
 type RecordsWrapper = Callable[[Any], pd.DataFrame]
 
+
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
+
 
 def hash_row(row: pd.Series, keys: tuple[str, ...]) -> int:
     """Compute deterministic integer hash of the primary key columns."""
     values = [str(row[k]) for k in keys]
     return int(hashlib.md5("||".join(values).encode("utf-8")).hexdigest(), 16)
+
 
 def save(
     con,
@@ -46,24 +49,26 @@ def save(
 
     # ---- FORCE MODE: insert everything ----
     if force:
-        df.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
+        df.to_sql(
+            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
+        )
         return
 
     # ---- Ensure PK hash column exists ----
-    if "pk" not in df.columns:
-        raise ValueError("DataFrame must contain a 'pk' primary-key hash column")
+    if "id" not in df.columns:
+        raise ValueError("DataFrame must contain a 'id' primary-key hash column")
 
     try:
-        values_clause = ", ".join(f"('{h}')" for h in df["pk"])
+        values_clause = ", ".join(f"('{h}')" for h in df["id"])
 
         query = f"""
-        WITH batch_hashes(pk) AS (
+        WITH batch_hashes(id) AS (
             VALUES {values_clause}
         )
-        SELECT pk
+        SELECT id
         FROM batch_hashes
-        WHERE pk NOT IN (
-            SELECT pk FROM {table}
+        WHERE id NOT IN (
+            SELECT id FROM {table}
         )
         """
 
@@ -72,7 +77,9 @@ def save(
 
     except duckdb.CatalogException:
         # table does not exist → insert everything
-        df.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
+        df.to_sql(
+            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
+        )
         return
 
     # ---- Filter only brand-new rows ----
@@ -80,23 +87,26 @@ def save(
     new_rows = df[df["pk"].isin(new_hashes)]
 
     if not new_rows.empty:
-        new_rows.to_sql(table, con, if_exists="append", index=False, method="multi", chunksize=bsize)
-        
+        new_rows.to_sql(
+            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
+        )
 
-def normalize_data(df: pd.DataFrame, prefix: str="") -> pd.DataFrame:
+
+def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     # cannot parse
     if not df.iloc[0].get("data", None):
         return df
 
     parsed = df["data"].map(ujson.loads)
     rdf = pd.json_normalize(parsed.tolist(), max_level=0).add_prefix(prefix)
-    norm = pd.concat([
-        df.drop(columns=["data"]).reset_index(drop=True),
-        rdf.reset_index(drop=True)
-    ], axis=1)
+    norm = pd.concat(
+        [df.drop(columns=["data"]).reset_index(drop=True), rdf.reset_index(drop=True)],
+        axis=1,
+    )
     return norm
 
-def normalize_zgrab2_records(df: pd.DataFrame, prefix: str="") -> pd.DataFrame:
+
+def normalize_zgrab2_records(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     parsed = df["data"].apply(ujson.loads)
 
     # Flatten the 'result' dict
@@ -105,12 +115,13 @@ def normalize_zgrab2_records(df: pd.DataFrame, prefix: str="") -> pd.DataFrame:
     rdf = rdf.add_prefix(prefix)
 
     # Concatenate original df (without 'data') and flattened result columns
-    norm = pd.concat([
-        df.drop(columns=["data"]).reset_index(drop=True),
-        rdf.reset_index(drop=True)
-    ], axis=1)
+    norm = pd.concat(
+        [df.drop(columns=["data"]).reset_index(drop=True), rdf.reset_index(drop=True)],
+        axis=1,
+    )
 
     return norm
+
 
 def normalize_records(df: pd.DataFrame) -> pd.DataFrame:
     """each record contains a source_name and an id, that is enough"""
@@ -120,11 +131,19 @@ def normalize_records(df: pd.DataFrame) -> pd.DataFrame:
         case _:
             return normalize_data(df, DATA_PREFIX)
 
-def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame: 
+
+def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
     return normalize_data(df, DATA_PREFIX)
 
+
 class Connector:
-    def __init__(self, db_path: str | None, name: str = "-", read_only: bool = False, config: dict = {}) -> None:
+    def __init__(
+        self,
+        db_path: str | None,
+        name: str = "-",
+        read_only: bool = False,
+        config: dict = {},
+    ) -> None:
         self.name = name
         self.db_path: str = db_path if db_path else ":memory:"
         self.readonly = read_only
@@ -141,18 +160,20 @@ class Connector:
         if not self.con:
             self.con = self.new_connection()
         return self.con
-    
+
     def new_connection(self) -> duckdb.DuckDBPyConnection:
-        return duckdb.connect(self.db_path, read_only=self.readonly) #config=self.config)
-    
-    def with_connection(self, name: str) -> 'Connector':
+        return duckdb.connect(
+            self.db_path, read_only=self.readonly
+        )  # config=self.config)
+
+    def with_connection(self, name: str) -> "Connector":
         return Connector(self.db_path, name, self.readonly, self.config)
-    
+
     def _extensions(self) -> None:
         conn = self.get_connection()
         conn.execute("INSTALL inet")
         conn.execute("LOAD inet")
-    
+
     def _pragmas(self) -> None:
         conn = self.get_connection()
         conn.execute("PRAGMA temp_directory='./duckdb_tmp';")
@@ -160,7 +181,7 @@ class Connector:
         conn.execute("PRAGMA memory_limit='10GB';")
         conn.execute("PRAGMA max_memory='10GB';")
         conn.execute("PRAGMA preserve_insertion_order=FALSE;")
-        conn.execute("PRAGMA checkpoint_threshold='100GB';") # very importante
+        conn.execute("PRAGMA checkpoint_threshold='100GB';")  # very importante
 
     def _macros(self) -> None:
         conn = self.get_connection()
@@ -189,10 +210,13 @@ class Connector:
             );       
         """)
 
+
 class Repository:
     _collection: duckdb.DuckDBPyRelation
 
-    def __init__(self, connector: Connector, q_size=2, writers: int=2, processors: int=2) -> None:
+    def __init__(
+        self, connector: Connector, q_size=2, writers: int = 2, processors: int = 2
+    ) -> None:
         self.connector = connector
         self.writers = writers
         self.processors = processors
@@ -216,25 +240,31 @@ class Repository:
             q += " WHERE " + " AND ".join(clauses)
 
         return self.get_connection().execute(q, params).df()
-    
+
     def _rebuild_records_view(self) -> None:
-        tables = self.get_connection().execute("""
+        tables = (
+            self.get_connection()
+            .execute("""
             SELECT table_name
             FROM information_schema.tables
             WHERE table_name LIKE 'records_%'
                 AND table_type = 'BASE TABLE'
             ORDER BY table_name
-        """).fetchall()
+        """)
+            .fetchall()
+        )
 
         grouped = defaultdict(list)
         for (tname,) in tables:
             prefix = "_".join(tname.split("_")[:-1])
             grouped[prefix].append(tname)
 
-        for (prefix, tnames) in grouped.items():
+        for prefix, tnames in grouped.items():
             union_sql = " UNION ALL ".join([f'SELECT * FROM "{t}"' for t in tnames])
             try:
-                self.get_connection().execute(f'CREATE OR REPLACE VIEW "{prefix}" AS {union_sql}')
+                self.get_connection().execute(
+                    f'CREATE OR REPLACE VIEW "{prefix}" AS {union_sql}'
+                )
             except Exception as e:
                 print(f"failed to rebuild records view: {prefix}")
                 raise e
@@ -242,8 +272,10 @@ class Repository:
     def get_connection(self) -> duckdb.DuckDBPyConnection:
         return self.connector.get_connection()
 
-    def get_fingerprints(self, *host: str, normalize: bool= False, **kwargs) -> pd.DataFrame:
-        'query the repo for records'
+    def get_fingerprints(
+        self, *host: str, normalize: bool = False, **kwargs
+    ) -> pd.DataFrame:
+        "query the repo for records"
         # select all hosts
         if len(host):
             kwargs["host"] = list(host)
@@ -251,26 +283,33 @@ class Repository:
         if normalize:
             return normalize_fingerprints(df)
         return df
-    
-    def get_records(self, *host: str, source: str="zgrab2", normalize: bool= False, prefix: str | None ="records",**kwargs) -> pd.DataFrame:
-        'query the repo for (ALL) records'
+
+    def get_records(
+        self,
+        *host: str,
+        source: str = "zgrab2",
+        normalize: bool = False,
+        prefix: str | None = "records",
+        **kwargs,
+    ) -> pd.DataFrame:
+        "query the repo for (ALL) records"
         # select all hosts
         if len(host):
             kwargs["ip"] = list(host)
-        
-        df = self._query("_".join(filter(None, [prefix,source])), **kwargs)
+
+        df = self._query("_".join(filter(None, [prefix, source])), **kwargs)
         if normalize:
             return normalize_records(df)
         return df
-    
+
     def get_tags(self, *host: str, **kwargs) -> pd.DataFrame:
         if len(host):
             kwargs["host"] = list(host)
         df = self._query("host_tags", **kwargs)
         return df
-    
+
     def summary(self) -> dict:
-        'returns a brief summary of the database contents'
+        "returns a brief summary of the database contents"
         con = self.get_connection()
         fpd = con.execute("""
             SELECT COUNT(DISTINCT host)
@@ -290,29 +329,35 @@ class Repository:
 
         if lbld is not None:
             summary["labelled"] = lbld[0]
-        
+
         return summary
-    
+
     # ---
-    def _peek(self, src_gen: Generator[pd.DataFrame, None, None]) -> pd.DataFrame | None:
+    def _peek(
+        self, src_gen: Generator[pd.DataFrame, None, None]
+    ) -> pd.DataFrame | None:
         try:
             return next(src_gen)
         except StopIteration:
             return
-        
-    def _fmt(self, df: pd.DataFrame, oc: list[str] = [], ic: list[str] = []) -> pd.DataFrame:
+
+    def _fmt(
+        self, df: pd.DataFrame, oc: list[str] = [], ic: list[str] = []
+    ) -> pd.DataFrame:
         for col in oc:
             df[col] = df[col].map(
                 lambda x: ujson.dumps(x) if isinstance(x, (dict, list)) else x
             )
 
         for col in ic:
-            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64", copy=False)
-            
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype(
+                "Int64", copy=False
+            )
+
         df["id"] = [uuid.uuid4().hex for _ in range(len(df))]
 
         return df
-    
+
     def _get_fmt_columns(self, df: pd.DataFrame) -> tuple[list[str], list[str]]:
         oc = []
 
@@ -326,7 +371,7 @@ class Repository:
 
         ic = list(df.select_dtypes(include=["int", "Int64", "Int32"]).columns)
         return oc, ic
-         
+
     def add_sources(self, *sources: Source):
         for src in sources:
             self.add_source(src)
@@ -345,7 +390,7 @@ class Repository:
         con = self.get_connection()
 
         print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
-        for  c in tqdm(chain([peek], c_gen)):
+        for c in tqdm(chain([peek], c_gen)):
             save(con, tab, self._fmt(c, oc, ic), bsize=src._batch_size)
             del c
         self._rebuild_records_view()
@@ -355,12 +400,14 @@ class Repository:
             return
         pkey = items[0].primary_key()
         table = items[0].table()
-        save(self.get_connection(), df=with_items(*items), primary_key=pkey, table=table)
+        save(
+            self.get_connection(), df=with_items(*items), primary_key=pkey, table=table
+        )
 
     def add_hosts(self, hosts: pd.DataFrame) -> None:
         save(self.get_connection(), df=hosts, primary_key="ip", table="hosts")
 
-    def with_view(self, name: str, q: str) -> 'Repository':
+    def with_view(self, name: str, q: str) -> "Repository":
         c = copy.copy(self)
         con = c.get_connection()
         con.sql(f"CREATE OR REPLACE VIEW {name} AS {q}")
@@ -369,10 +416,10 @@ class Repository:
 
     def collect(self) -> pd.DataFrame:
         return self._collection.df()
-    
+
     def query(self, q: str, bsize=DEFAULT_BSIZE) -> Generator[Any, None, None]:
         cursor = self.get_connection().execute(q)
-        cols = [c[0] for c in cursor.description] # type: ignore
+        cols = [c[0] for c in cursor.description]  # type: ignore
 
         while True:
             if rows := cursor.fetchmany(bsize):
@@ -381,25 +428,34 @@ class Repository:
                 continue
             break
 
-    def query_batch(self, q, normalize: bool=True, bsize=DEFAULT_BSIZE) -> Generator[pd.DataFrame, None, None]:
+    def query_batch(
+        self, q, normalize: bool = True, bsize=DEFAULT_BSIZE
+    ) -> Generator[pd.DataFrame, None, None]:
         con = self.connector.new_connection()
         cursor = con.execute(q)
         norm = normalize_records if normalize else lambda x: x
-        
+
         for b in cursor.fetch_record_batch(bsize):
             yield norm(b.to_pandas())
 
-    def queryb(self, q, normalize: bool=True, bsize=DEFAULT_BSIZE) -> tuple[int, Generator[Any, None, None]]:
+    def queryb(
+        self, q, normalize: bool = True, bsize=DEFAULT_BSIZE
+    ) -> tuple[int, Generator[Any, None, None]]:
         dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
         con = self.connector.new_connection()
-        d = res[0] if (res:=con.execute(dq).fetchone()) else 0 # <---- this destroys previous queries, so we need a new connection for it
+        d = (
+            res[0] if (res := con.execute(dq).fetchone()) else 0
+        )  # <---- this destroys previous queries, so we need a new connection for it
         return d, self.query_batch(q, normalize, bsize)
 
-def load_repository(sources: list[Source] = [], db: str|None=None, read_only: bool = False) -> Repository:
-    '''
+
+def load_repository(
+    sources: list[Source] = [], db: str | None = None, read_only: bool = False
+) -> Repository:
+    """
     Create a repository from a list of sources.
     - db: name of the database - if not set, load in memory
-    '''
+    """
     connector = Connector(db, read_only=read_only)
     repo = Repository(connector)
     repo.add_sources(*sources)

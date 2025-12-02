@@ -11,23 +11,25 @@ from typing import Generator
 @dataclass
 class Model(ABC):
     _: KW_ONLY
+    # synthetic primary key ALWAYS present
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    pk: str = field(init=False)
-    # TODO: add an index to rows based on their pk hash
-    # pk: str =
 
     def __post_init__(self):
-        # Compute the PK hash from the PK fields returned by primary_key()
-        pk_fields = self.primary_key()
+        # if the model wants deterministic composite identity,
+        # override generate_pk() to compute it from its fields.
+        self.id = self.generate_pk()
 
-        # Collect values in PK order
-        values = [str(getattr(self, f)) for f in pk_fields]
+    def generate_pk(self) -> str:
+        if self.primary_key() == ("id",):
+            return self.id  # keep UUID
+        return self.compute_composite_hash()
 
-        # Hash them deterministically
+    def compute_composite_hash(self) -> str:
+        fields = self.primary_key()
         h = hashlib.sha256()
-        for v in values:
-            h.update(v.encode())
-        self.pk = h.hexdigest()
+        for f in fields:
+            h.update(str(getattr(self, f)).encode())
+        return h.hexdigest()
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -82,7 +84,7 @@ class Host(Model):
     
 @dataclass
 class Fingerprint(Model):
-    # ID of the host
+    # Host (ip)
     host: str
     # ID of the record related to
     record_id: str
@@ -155,7 +157,7 @@ class Tag(Model):
 
 @dataclass
 class HostTag(Model):
-    # Host ID
+    # Host (ip)
     host: str
     # ID of hte Tag
     tag_id: str

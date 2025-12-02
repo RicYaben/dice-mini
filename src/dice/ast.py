@@ -5,17 +5,22 @@ from collections import OrderedDict
 import ipaddress
 from lark import Lark, Token, Transformer, Tree, v_args
 
+
 @dataclass
 class IPRange:
     start: int
     end: int
+
 
 @dataclass
 class Query:
     ip_range: IPRange
     filter: Optional["Expr"]  # top-level expression
 
-class Expr: pass
+
+class Expr:
+    pass
+
 
 @dataclass
 class Comparison(Expr):
@@ -23,15 +28,18 @@ class Comparison(Expr):
     op: str
     value: str
 
+
 @dataclass
 class Not(Expr):
     expr: Expr
+
 
 @dataclass
 class BinaryOp(Expr):
     op: str  # "AND" or "OR"
     left: Expr
     right: Expr
+
 
 def parse_ip_range(s: str) -> IPRange:
     s = s.strip()
@@ -40,12 +48,14 @@ def parse_ip_range(s: str) -> IPRange:
         return IPRange(int(net.network_address), int(net.broadcast_address))
     if "-" in s:
         a, b = s.split("-", 1)
-        return IPRange(int(ipaddress.ip_address(a.strip())), int(ipaddress.ip_address(b.strip())))
+        return IPRange(
+            int(ipaddress.ip_address(a.strip())), int(ipaddress.ip_address(b.strip()))
+        )
     ip = ipaddress.ip_address(s)
     return IPRange(int(ip), int(ip))
 
-class QueryTransformer(Transformer):
 
+class QueryTransformer(Transformer):
     # Utility: fully unwrap lark Tree/Token to Python primitives
     def _unwrap(self, x):
         if isinstance(x, Tree):
@@ -115,7 +125,7 @@ class QueryTransformer(Transformer):
             "type": "COND",
             "field": str(field),
             "op": str(op),
-            "value": self._value(value)
+            "value": self._value(value),
         }
 
     def _value(self, val):
@@ -125,6 +135,7 @@ class QueryTransformer(Transformer):
 
     def value(self, items):
         return self._unwrap(items[0])
+
 
 TABLE_MAP = {
     "port": "fingerprints",
@@ -141,12 +152,13 @@ FIELD_MAP = {
     "port": "port",
 }
 
+
 class SQLBuilder:
     def __init__(self):
         self.joins = OrderedDict()
 
     def build(self, ast):
-        'Returns a query for hosts'
+        "Returns a query for hosts"
 
         sql = ["SELECT DISTINCT(hosts.ip) FROM records_hosts AS hosts"]
         where = []
@@ -154,9 +166,7 @@ class SQLBuilder:
         # ---------- IP ----------
         ip = ast.get("ip", "0.0.0.0/0")  # default IP
         if "/" in ip:
-            where.append(
-                f"ip_within_cidr(hosts.ip, '{ip}')"
-            )
+            where.append(f"ip_within_cidr(hosts.ip, '{ip}')")
         else:
             where.append(f"hosts.ip = '{ip}'")
 
@@ -210,7 +220,7 @@ class SQLBuilder:
 
         # Quote strings
         if isinstance(value, str):
-            if not value.replace('.', '').isdigit():
+            if not value.replace(".", "").isdigit():
                 # treat as string
                 value = value.strip('"')
                 value = "'" + value.replace("'", "''") + "'"
@@ -252,29 +262,22 @@ class SQLBuilder:
             return
 
         if table == "fingerprints":
-            self.join(
-                "LEFT JOIN fingerprints ON fingerprints.host = hosts.ip"
-            )
+            self.join("LEFT JOIN fingerprints ON fingerprints.host = hosts.ip")
         elif table == "tags":
             # join through host_tags
-            self.join(
-                "LEFT JOIN host_tags ON host_tags.host = hosts.ip"
-            )
-            self.join(
-                "LEFT JOIN tags ON tags.id = host_tags.tag_id"
-            )
+            self.join("LEFT JOIN host_tags ON host_tags.host = hosts.ip")
+            self.join("LEFT JOIN tags ON tags.id = host_tags.tag_id")
         elif table == "labels":
             self.ensure_join("fingerprints")
             # join through host_labels
             self.join(
                 "LEFT JOIN fingerprint_labels ON fingerprint_labels.fingerprint_id = fingerprints.id"
             )
-            self.join(
-                "LEFT JOIN labels ON labels.id = fingerprint_labels.label_id"
-            )
+            self.join("LEFT JOIN labels ON labels.id = fingerprint_labels.label_id")
 
     def join(self, j: str):
         self.joins[j] = None
+
 
 def parse_query(query: str):
     if not query or not query.strip():
@@ -323,6 +326,7 @@ def get_grammar():
         value: NUMBER | STRING | CNAME
     """
 
+
 class Parser:
     def __init__(self, grammar: str, transformer: Transformer) -> None:
         self.parser = Lark(grammar, start="start", parser="lalr", lexer="contextual")
@@ -333,16 +337,19 @@ class Parser:
         tree = self.parser.parse(q)
         exp = self.transformer.transform(tree)
         return exp
-    
+
     def to_sql(self, q: str):
         ast = self.parse(q)
         return self.builder.build(ast)
-    
+
+
 def new_transformer():
     return QueryTransformer()
 
+
 def new_parser(grammar: str, transformer: Transformer) -> Parser:
     return Parser(grammar, transformer)
+
 
 def make_parser() -> Parser:
     t = new_transformer()

@@ -3,12 +3,13 @@ from typing import List
 import typer
 from dice.repo import load_repository
 from dice.helpers import make_sources
+from dice.config import DEFAULT_BSIZE
 
 insert_app = typer.Typer(help="Insert a source into the database")
 
 def parse_source(entry: str):
     """
-    Split entry into 1–3 fields.
+    Split entry into 1-3 fields.
     Example inputs:
         "a.jsonl"
         "a.jsonl zmap"
@@ -53,10 +54,10 @@ def add(
         help="path to database"
     ),
     batch: int = typer.Option(
-        10_000,
+        DEFAULT_BSIZE,
         "-b",
         "--batch",
-        help="batch size to read from each source. default 10K"
+        help="batch size to read from each source. default 50K"
     )
 ):
     repo = load_repository(db=database)

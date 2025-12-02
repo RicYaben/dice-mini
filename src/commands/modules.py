@@ -1,6 +1,6 @@
 import typer
-from dice.module import new_component_manager
-from dice.module import load_registry
+from dice.config import DEFAULT_MODULES_DIR
+from dice.module import new_component_manager, load_registry
 from dice.modules import registry as core
 
 modules_app = typer.Typer(help="Check registered modules")
@@ -14,7 +14,7 @@ def list(
         help="Comma separated list of modules"
     ),
     registry: str | None = typer.Option(
-        "./modules",
+        DEFAULT_MODULES_DIR,
         "--registry",
         help="Path to the directory containing module resitry"
     ),

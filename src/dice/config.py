@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Dict
 
 DATA_PREFIX: str = "data_"
+DEFAULT_MODULES_DIR: str = "modules"
 DEFAULT_BSIZE: int = 50_000
 
 @dataclass(frozen=True)

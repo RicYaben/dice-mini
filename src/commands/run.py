@@ -1,6 +1,5 @@
-from dice.config import MFACTORY
-from dice.module import new_component_manager
-from dice.module import load_registry
+from dice.config import MFACTORY, DEFAULT_MODULES_DIR
+from dice.module import new_component_manager, load_registry
 from dice.modules import registry as core
 
 import dice
@@ -45,7 +44,7 @@ def run(
             help="mock run"
         ),
         registry: str | None = typer.Option(
-            "./modules",
+            DEFAULT_MODULES_DIR,
             "--registry",
             help="Path to the directory containing module resitry"
         ),

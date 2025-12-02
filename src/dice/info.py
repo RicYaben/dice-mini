@@ -1,4 +1,3 @@
-
 class InfoQueryBuilder:
     """
     Builds a single DuckDB SQL query to extract hosts, ports, services+labels, and tags
@@ -105,6 +104,7 @@ class InfoQueryBuilder:
         ORDER BY h.ip;
         """
         return sql.strip()
-    
+
+
 def new_info(fields: list[str]) -> InfoQueryBuilder:
     return InfoQueryBuilder(fields)

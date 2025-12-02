@@ -7,28 +7,34 @@ from typing import Any, Callable, Generic, Iterator, TypeVar
 
 T = TypeVar("T", bound="Label")
 
+
 @dataclass
 class Label(Generic[T]):
-    name: str # actual name of the label
-    label: str # label combined
-    path: list[str] # the label splitted
-    count: int # count of rows with this label
-    group: str # group name, i.e., the column
-    children: list[T] = field(default_factory=list) # children
-    
+    name: str  # actual name of the label
+    label: str  # label combined
+    path: list[str]  # the label splitted
+    count: int  # count of rows with this label
+    group: str  # group name, i.e., the column
+    children: list[T] = field(default_factory=list)  # children
+
     def add(self, *lab: T):
         self.children.extend(lab)
 
+
 class PrepLab:
-    def __init__(self, index: int, group: str, name: str, label: str, text: str, color: str) -> None:
+    def __init__(
+        self, index: int, group: str, name: str, label: str, text: str, color: str
+    ) -> None:
         self.index = index
         self.group = group
         self.name = name
         self.label = label
-        self.text  = text
+        self.text = text
         self.color = color
 
+
 type ConfFilter = Callable[[list[PrepLab]], Iterator[PrepLab]]
+
 
 @dataclass
 class LabConf:
@@ -47,7 +53,7 @@ class LabConf:
         matches: set[PrepLab] = set()
         if self.filter:
             matches = set(self.filter(labs))
-        
+
         if self.label:
             for lab in labs:
                 if fnmatch.fnmatch(lab.label, self.label):
@@ -56,6 +62,7 @@ class LabConf:
         for m in matches:
             m.color = self.color
 
+
 @dataclass
 class LabelCollection:
     color: str = "black"
@@ -63,18 +70,21 @@ class LabelCollection:
 
     def labels(self) -> list[str]:
         return [l.text for l in self._prep]
-    
-    def add(self, *labs: Label) -> 'LabelCollection':
+
+    def add(self, *labs: Label) -> "LabelCollection":
         def walk(lab: Label):
             for ch in sorted(lab.children, key=lambda l: l.name):
                 walk(ch)
-            prep = PrepLab(len(self._prep), lab.group, lab.name, lab.label, lab.name, self.color)
+            prep = PrepLab(
+                len(self._prep), lab.group, lab.name, lab.label, lab.name, self.color
+            )
             self._prep.append(prep)
+
         for lab in labs:
             walk(lab)
         return self
-    
-    def update(self, *confs: LabConf) -> 'LabelCollection':
+
+    def update(self, *confs: LabConf) -> "LabelCollection":
         for conf in confs:
             # changes the drawing properties of prepared labels
             # it filters the labels and applies the changes
@@ -86,11 +96,11 @@ class LabelCollection:
             if p.label == lab:
                 return p
         raise ValueError(f"label {lab} not found")
-    
+
     def all(self) -> list[PrepLab]:
         return self._prep
-    
-    
+
+
 @dataclass
 class Links:
     source: list[int] = field(default_factory=lambda: [])
@@ -119,35 +129,54 @@ class Links:
 
     def to_dict(self) -> dict:
         return {
-            "source": self.source, 
-            "target": self.target, 
-            "value": self.value, 
-            "color": self.color
+            "source": self.source,
+            "target": self.target,
+            "value": self.value,
+            "color": self.color,
         }
-    
+
+
 @dataclass
 class Nodes:
     ids: list[str]
     links: dict
     labels: list[str]
 
+
 def filter_labels(labels: list[PrepLab], pattern: str) -> list[PrepLab]:
     return [lab for lab in labels if fnmatch.fnmatch(lab.label, pattern)]
 
-def make_lab_conf(label: str | None=None, color: Any="black", border: str = "black", show: bool = True, cfilter: ConfFilter | None = None) -> LabConf:
+
+def make_lab_conf(
+    label: str | None = None,
+    color: Any = "black",
+    border: str = "black",
+    show: bool = True,
+    cfilter: ConfFilter | None = None,
+) -> LabConf:
     return LabConf(label, color, border, show, cfilter)
 
-def make_collection(labs: list[Label], confs: list[LabConf], color: str = "black") -> LabelCollection:
+
+def make_collection(
+    labs: list[Label], confs: list[LabConf], color: str = "black"
+) -> LabelCollection:
     return LabelCollection(color=color).add(*labs).update(*confs)
 
-def make_labels(data: pd.DataFrame, *column: str, lconfs: list[LabConf] = [], prefix: str = "", color: str="black") -> tuple[list[Label], LabelCollection]:
-    def walk(w: pd.DataFrame, cols: list[str], path: list[str]=[]) -> list[Label]:
+
+def make_labels(
+    data: pd.DataFrame,
+    *column: str,
+    lconfs: list[LabConf] = [],
+    prefix: str = "",
+    color: str = "black",
+) -> tuple[list[Label], LabelCollection]:
+    def walk(w: pd.DataFrame, cols: list[str], path: list[str] = []) -> list[Label]:
         labs = []
         if not cols:
             return []
-        
+
         c_cols = copy.copy(cols)
-        group = prefix+c_cols.pop(0)
+        group = prefix + c_cols.pop(0)
 
         for g_name, g_df in w.groupby(group):
             assert isinstance(g_name, str)
@@ -160,26 +189,28 @@ def make_labels(data: pd.DataFrame, *column: str, lconfs: list[LabConf] = [], pr
                 label=":".join(p),
                 count=len(g_df.index),
                 group=group,
-                children=walk(g_df, c_cols, p)
+                children=walk(g_df, c_cols, p),
             )
 
             labs.append(lab)
         return labs
+
     roots = walk(data, [*column])
     collection = make_collection(roots, lconfs, color)
-    return (roots,collection)
+    return (roots, collection)
+
 
 def make_links(roots: list[Label], col: LabelCollection) -> dict:
     return Links().from_roots(roots, col)
 
-def make_nodes(
-        data: pd.DataFrame, 
-        *column: str, 
-        ids: list[str], 
-        lconfs: list[LabConf]=[],
-        prefix: str="",
-    ) -> Nodes:
 
+def make_nodes(
+    data: pd.DataFrame,
+    *column: str,
+    ids: list[str],
+    lconfs: list[LabConf] = [],
+    prefix: str = "",
+) -> Nodes:
     roots, coll = make_labels(data, *column, lconfs=lconfs, prefix=prefix)
     links = make_links(roots, coll)
 
