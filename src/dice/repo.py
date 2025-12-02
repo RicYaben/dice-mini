@@ -138,11 +138,12 @@ class Connector:
         self.config = config
 
         self.con: duckdb.DuckDBPyConnection | None = None
-        self._extensions()
-        self._pragmas()
 
-        if not read_only:
-            self._macros()
+    def init_con(self, con, readonly: bool):
+        self._extensions(con)
+        self._pragmas(con)
+        if not readonly:
+            self._macros(con)
 
     def get_connection(self) -> duckdb.DuckDBPyConnection:
         if not self.con:
@@ -150,20 +151,21 @@ class Connector:
         return self.con
 
     def new_connection(self) -> duckdb.DuckDBPyConnection:
-        return duckdb.connect(
+        con = duckdb.connect(
             self.db_path, read_only=self.readonly
         )  # config=self.config)
+
+        self.init_con(con, self.readonly)
+        return con
 
     def with_connection(self, name: str) -> "Connector":
         return Connector(self.db_path, name, self.readonly, self.config)
 
-    def _extensions(self) -> None:
-        conn = self.get_connection()
+    def _extensions(self, conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute("INSTALL inet")
         conn.execute("LOAD inet")
 
-    def _pragmas(self) -> None:
-        conn = self.get_connection()
+    def _pragmas(self, conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute("PRAGMA temp_directory='./duckdb_tmp';")
         conn.execute("PRAGMA threads=8;")
         conn.execute("PRAGMA memory_limit='10GB';")
@@ -171,8 +173,7 @@ class Connector:
         conn.execute("PRAGMA preserve_insertion_order=FALSE;")
         conn.execute("PRAGMA checkpoint_threshold='100GB';")  # very importante
 
-    def _macros(self) -> None:
-        conn = self.get_connection()
+    def _macros(self, conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute("""
             CREATE OR REPLACE MACRO network_from_cidr(cidr_range) AS (
                 cast(string_split(string_split(cidr_range, '/')[1], '.')[1] as bigint) * (256 * 256 * 256) +
