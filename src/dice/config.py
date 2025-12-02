@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Dict
+from dataclasses import dataclass, field
+from collections import OrderedDict
 
 DATA_PREFIX: str = "data_"
 DEFAULT_MODULES_DIR: str = "modules"
@@ -20,7 +20,7 @@ class MType:
 
 class MFactory:
     def __init__(self):
-        self._lookup: Dict[str, MType] = {}
+        self._lookup: OrderedDict[str, MType] = OrderedDict()
 
     def register(self, mt: MType):
         # Map each of the three identifiers to the same MType
@@ -34,15 +34,13 @@ class MFactory:
         except KeyError:
             raise KeyError(f"No module type found for key: {key!r}")
 
-    def all(self):
+    def all(self) -> list[MType]:
         # dedupe by .command
-        seen = set()
-        uniq = []
-        for mt in self._lookup.values():
-            if mt.command not in seen:
-                uniq.append(mt)
-                seen.add(mt.command)
-        return uniq
+        ret = []
+        for v in self._lookup.values():
+            if v not in ret: 
+                ret.append(v)
+        return ret
 
 # ---- Define your module types ----
 
@@ -54,6 +52,6 @@ TAGGER = MType(command="tag", name="tag", alias="t")
 # ---- Build factory with registry ----
 
 MFACTORY = MFactory()
-for m in [SCANNER, CLASSIFIER, FINGERPRINTER, TAGGER]:
+for m in [SCANNER, FINGERPRINTER, CLASSIFIER, TAGGER]:
     MFACTORY.register(m)
 

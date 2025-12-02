@@ -41,6 +41,8 @@ class Module:
     _handler: ModuleHandler
     _repo: Optional[Repository] = None
 
+    collection: Optional[str] = None
+
     # registered labels
     _labels: dict[str, Label] = field(default_factory=dict)
     _tags: dict[str, Tag] = field(default_factory=dict)
@@ -270,11 +272,8 @@ class Engine:
         for comp in self.components:
             for sig in comp.signatures:
                 for mod in sig.modules:
-                    # get module path / collection if available
-                    collection = getattr(mod, "collection", None)
-                    module_name = f"{collection}:{mod.name}" if collection else mod.name
                     rows.append(
-                        [comp.name, str(comp.c_type).upper(), sig.name, module_name]
+                        [comp.name, str(comp.c_type).upper(), sig.name, mod.collection, mod.name]
                     )
 
         if not rows:
@@ -282,25 +281,30 @@ class Engine:
             return
 
         # sort rows by Component, Type, Signature, Module
-        rows.sort(key=lambda r: (r[0], r[1], r[2], r[3]))
+        rows.sort(key=lambda r: (r[0], r[1], r[2], r[3], r[4]))
+
+        def collapse_repeated(rows):
+            if not rows:
+                return rows
+
+            # one "last seen" per column
+            num_cols = len(rows[0])
+            last_seen = [None] * num_cols
+
+            for row in rows:
+                for col in range(num_cols):
+                    current = row[col]
+
+                    # Only blank out if the current value matches AND all previous columns are empty
+                    if current == last_seen[col] and all(row[i] == "" for i in range(col)):
+                        row[col] = ""
+                    else:
+                        last_seen[col] = current
+
+            return rows
 
         # merge repeated cells visually
-        last_comp = last_type = last_sig = None
-        for row in rows:
-            if row[0] == last_comp:
-                row[0] = ""
-            else:
-                last_comp = row[0]
-
-            if row[1] == last_type and row[0] == "":
-                row[1] = ""
-            else:
-                last_type = row[1]
-
-            if row[2] == last_sig and row[0] == "" and row[1] == "":
-                row[2] = ""
-            else:
-                last_sig = row[2]
+        rows = collapse_repeated(rows)
 
         print(
             "\033[1mEngine information table.\033[0m  Includes loaded modules by components and signatures."
@@ -308,7 +312,7 @@ class Engine:
         print(
             tabulate(
                 rows,
-                headers=["Component", "Type", "Signature", "Module"],
+                headers=["Component", "Type", "Signature", "Collection", "Module"],
                 tablefmt="rounded_outline",
             )
         )
@@ -547,6 +551,9 @@ class ModuleRegistry:
         self.children: dict[str, "ModuleRegistry"] = {}
 
     def add(self, *module: Module) -> "ModuleRegistry":
+        for mod in module:
+            mod.collection = self.name
+
         self.modules.extend(module)
         return self
 
