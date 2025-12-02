@@ -9,7 +9,6 @@ import ujson
 import copy
 import uuid
 import queue
-import hashlib
 
 from dice.models import Source
 from dice.helpers import new_collection
@@ -21,31 +20,18 @@ warnings.simplefilter(action="ignore", category=UserWarning)
 
 type RecordsWrapper = Callable[[Any], pd.DataFrame]
 
-
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
-
-
-def hash_row(row: pd.Series, keys: tuple[str, ...]) -> int:
-    """Compute deterministic integer hash of the primary key columns."""
-    values = [str(row[k]) for k in keys]
-    return int(hashlib.md5("||".join(values).encode("utf-8")).hexdigest(), 16)
-
 
 def save(
     con,
     table: str,
     df: pd.DataFrame,
-    primary_key: str | tuple[str, ...] = "id",
     force: bool = False,
     bsize: int = DEFAULT_BSIZE,
 ):
     if df.empty:
         return
-
-    # normalize primary_key to tuple (still used for table creation, maybe)
-    if isinstance(primary_key, str):
-        primary_key = (primary_key,)
 
     # ---- FORCE MODE: insert everything ----
     if force:
@@ -53,22 +39,24 @@ def save(
             table, con, if_exists="append", index=False, method="multi", chunksize=bsize
         )
         return
+    
+    pkey = "id"
 
     # ---- Ensure PK hash column exists ----
-    if "id" not in df.columns:
-        raise ValueError("DataFrame must contain a 'id' primary-key hash column")
+    if pkey not in df.columns:
+        raise ValueError(f"DataFrame must contain a '{pkey}' primary-key hash column")
 
     try:
-        values_clause = ", ".join(f"('{h}')" for h in df["id"])
+        values_clause = ", ".join(f"('{h}')" for h in df[pkey])
 
         query = f"""
-        WITH batch_hashes(id) AS (
+        WITH batch_hashes({pkey}) AS (
             VALUES {values_clause}
         )
-        SELECT id
+        SELECT {pkey}
         FROM batch_hashes
-        WHERE id NOT IN (
-            SELECT id FROM {table}
+        WHERE {pkey} NOT IN (
+            SELECT {pkey} FROM {table}
         )
         """
 
@@ -83,8 +71,8 @@ def save(
         return
 
     # ---- Filter only brand-new rows ----
-    new_hashes = set(new_hashes_df["pk"])
-    new_rows = df[df["pk"].isin(new_hashes)]
+    new_hashes = set(new_hashes_df[pkey])
+    new_rows = df[df[pkey].isin(new_hashes)]
 
     if not new_rows.empty:
         new_rows.to_sql(
@@ -398,14 +386,13 @@ class Repository:
     def save_models(self, *items: Any) -> None:
         if not items:
             return
-        pkey = items[0].primary_key()
         table = items[0].table()
         save(
-            self.get_connection(), df=with_items(*items), primary_key=pkey, table=table
+            self.get_connection(), df=with_items(*items), table=table
         )
 
     def add_hosts(self, hosts: pd.DataFrame) -> None:
-        save(self.get_connection(), df=hosts, primary_key="ip", table="hosts")
+        save(self.get_connection(), df=hosts, table="hosts")
 
     def with_view(self, name: str, q: str) -> "Repository":
         c = copy.copy(self)
