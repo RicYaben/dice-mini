@@ -116,7 +116,7 @@ class Module:
         return new_host_tag(host, t.id, details, protocol, port)
 
     def make_fp_tag(self, fp, tag: str, details: str = "") -> HostTag:
-        return self.make_tag(fp["ip"], tag, details, fp["protocol"], fp["port"])
+        return self.make_tag(fp["host"], tag, details, fp["protocol"], fp["port"])
 
     def with_pbar(
         self,
