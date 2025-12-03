@@ -118,6 +118,8 @@ class Module:
     def make_fp_tag(self, fp, tag: str, details: str = "") -> HostTag:
         return self.make_tag(fp["host"], tag, details, fp["protocol"], fp["port"])
 
+    # ---
+    
     def with_pbar(
         self,
         handler: Callable[[pd.DataFrame], None],

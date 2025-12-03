@@ -15,10 +15,10 @@ def query(
     exclude: Annotated[str, typer.Option()] = ""
 ) -> None:
     parser = make_parser()
-    q = parser.to_sql(q)
+    qt = parser.to_sql(q)
 
     repo = load_repository(db=database)
-    n, batches = repo.queryb(q)
+    n, batches = repo.queryb(qt)
     print(f"found {n} hosts")
 
     flist = fields.split(",")

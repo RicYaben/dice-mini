@@ -160,6 +160,15 @@ class Connector:
 
     def with_connection(self, name: str) -> "Connector":
         return Connector(self.db_path, name, self.readonly, self.config)
+    
+    def attach(self, path: str, name: str) -> None:
+        con = self.get_connection()
+        con.execute(f"ATTACH '{path}' AS {name};")
+
+    def copy(self, table: str, src: str) -> None:
+        con = self.get_connection()
+        con.execute(f"DROP TABLE IF EXISTS main.{table}")
+        con.execute(f"CREATE TABLE main.{table} AS SELECT * FROM {src}.{table}")
 
     def _extensions(self, conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute("INSTALL inet")
@@ -199,17 +208,17 @@ class Connector:
             );       
         """)
 
+def new_connector(db: str, readonly: bool = False, name: str = "-") -> Connector:
+    return Connector(db, read_only=readonly, name=name)
+
 
 class Repository:
     _collection: duckdb.DuckDBPyRelation
 
     def __init__(
-        self, connector: Connector, q_size=2, writers: int = 2, processors: int = 2
+        self, connector: Connector
     ) -> None:
         self.connector = connector
-        self.writers = writers
-        self.processors = processors
-        self._queue = queue.Queue(maxsize=q_size)
 
     def _query(self, table: str, **kwargs) -> pd.DataFrame:
         q = f"SELECT * FROM {table}"
@@ -380,7 +389,7 @@ class Repository:
 
         print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
         for c in tqdm(chain([peek], c_gen)):
-            save(con, tab, self._fmt(c, oc, ic), bsize=src._batch_size)
+            save(con, tab, self._fmt(c, oc, ic), force=True, bsize=src._batch_size)
             del c
         self._rebuild_records_view()
 
@@ -436,6 +445,8 @@ class Repository:
         )  # <---- this destroys previous queries, so we need a new connection for it
         return d, self.query_batch(q, normalize, bsize)
 
+def new_repository(connector: Connector) -> Repository:
+    return Repository(connector)
 
 def load_repository(
     sources: list[Source] = [], db: str | None = None, read_only: bool = False
@@ -445,6 +456,6 @@ def load_repository(
     - db: name of the database - if not set, load in memory
     """
     connector = Connector(db, read_only=read_only)
-    repo = Repository(connector)
+    repo = new_repository(connector)
     repo.add_sources(*sources)
     return repo

@@ -9,11 +9,12 @@ class InfoQueryBuilder:
         if "all" in self.fields:
             self.fields = {"hosts", "ports", "services", "tags", "labels"}
 
-    def make(self, hosts: list[str]) -> str:
+    def make(self, hosts: list[str], db: str = "") -> str:
         host_list = ",".join(f"'{h}'" for h in hosts)
+        db_prefix = f"{db}." if db else ""
 
         # ---------- Hosts fields ----------
-        host_select = "h.ip, h.prefix, h.asn"  # include all fields from hosts
+        host_select = "h.ip, h.prefix, h.asn"
 
         # ---------- Ports ----------
         ports_select = ""
@@ -25,7 +26,7 @@ class InfoQueryBuilder:
                 SELECT
                     f.host AS ip,
                     list(DISTINCT f.port ORDER BY f.port) AS ports
-                FROM fingerprints f
+                FROM {db_prefix}fingerprints f
                 WHERE f.host IN ({host_list})
                 GROUP BY f.host
             ) AS ports_sub
@@ -48,18 +49,18 @@ class InfoQueryBuilder:
                             data := f.data,
                             labels := COALESCE(lbl.labels, [])
                         )
-                        ORDER BY f.id
+                        ORDER BY f.protocol, f.port
                     ) AS services
                 FROM (
                     SELECT *
-                    FROM fingerprints f
+                    FROM {db_prefix}fingerprints f
                     WHERE f.host IN ({host_list})
                 ) AS f
                 LEFT JOIN (
                     SELECT fl.fingerprint_id,
                         list(l.name ORDER BY l.name) AS labels
-                    FROM fingerprint_labels fl
-                    JOIN labels l ON l.id = fl.label_id
+                    FROM {db_prefix}fingerprint_labels fl
+                    JOIN {db_prefix}labels l ON l.id = fl.label_id
                     GROUP BY fl.fingerprint_id
                 ) AS lbl
                 ON lbl.fingerprint_id = f.id
@@ -78,8 +79,8 @@ class InfoQueryBuilder:
                 SELECT
                     ht.host AS ip,
                     list(t.name ORDER BY t.name) AS tags
-                FROM host_tags ht
-                JOIN tags t ON t.id = ht.tag_id
+                FROM {db_prefix}host_tags ht
+                JOIN {db_prefix}tags t ON t.id = ht.tag_id
                 WHERE ht.host IN ({host_list})
                 GROUP BY ht.host
             ) AS tags_sub
@@ -95,7 +96,7 @@ class InfoQueryBuilder:
             {tags_select}
         FROM (
             SELECT DISTINCT ip, prefix, asn
-            FROM records_hosts AS hosts
+            FROM {db_prefix}records_hosts AS hosts
             WHERE ip IN ({host_list})
         ) AS h
         {ports_join}
@@ -103,6 +104,7 @@ class InfoQueryBuilder:
         {tags_join}
         ORDER BY h.ip;
         """
+
         return sql.strip()
 
 
