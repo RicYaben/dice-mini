@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import ipaddress
+import numpy as np
 
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
@@ -82,6 +83,14 @@ def prefix_density(prefix: str, count: int) -> tuple[int, float]:
 def draw_first_octet_grid(ax: Axes, hilbert: "HilbertCurve"):
     octet_size = 2**24  # first octet
 
+    ax.figure.canvas.draw()  # ensure limits exist
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
+
+    diag = np.hypot(x1 - x0, y1 - y0)
+    # tuning factor: larger = larger fontsize
+    fontsize_base = diag * 0.00002  
+
     for octet in range(256):
         start_dist = octet * octet_size
         end_dist = (octet + 1) * octet_size - 1
@@ -117,7 +126,7 @@ def draw_first_octet_grid(ax: Axes, hilbert: "HilbertCurve"):
             y_max, 
             str(octet), 
             color="gray", 
-            fontsize=15,
+            fontsize=fontsize_base,
             fontweight="bold",
             ha="right", 
             va="top", 
@@ -137,7 +146,7 @@ def plot_ips_hilbert(
         col: str="host",
         groups: list[str]=[], # columns to group by for the labels, e.g.: ["a", "b"] -> "a_val:b_val"
         lconfs: list[LabConf] = [],
-        color: str = "black", # default color
+        color: str | None = "black", # default color
         ax: Axes | None = None,
     ) -> Figure | None:
     """IP addresses mapped to 2D Hilbert curve"""
