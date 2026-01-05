@@ -238,13 +238,9 @@ class Engine:
 
     def run(
         self,
+        repo: Repository,
         srcs: list[Source] = [],
-        db: str | None = None,
-        repo: Repository | None = None,
     ) -> Repository:
-        # load all the sources
-        if not repo:
-            repo = load_repository(db=db)
         repo.add_sources(*srcs)
 
         def fcomp(t):

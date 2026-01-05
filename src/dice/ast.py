@@ -157,18 +157,26 @@ class SQLBuilder:
     def __init__(self):
         self.joins = OrderedDict()
 
-    def build(self, ast):
+    def build(self, hlist: list[str], ast):
         "Returns a query for hosts"
 
         sql = ["SELECT DISTINCT(hosts.ip) FROM records_hosts AS hosts"]
         where = []
 
         # ---------- IP ----------
-        ip = ast.get("ip", "0.0.0.0/0")  # default IP
-        if "/" in ip:
-            where.append(f"ip_within_cidr(hosts.ip, '{ip}')")
-        else:
-            where.append(f"hosts.ip = '{ip}'")
+        ip_clauses = []
+        for entry in hlist:
+            if "/" in entry:
+                ip_clauses.append(
+                    f"ip_within_cidr(hosts.ip, '{entry}')"
+                )
+            else:
+                ip_clauses.append(
+                    f"hosts.ip = '{entry}'"
+                )
+
+        # group OR conditions
+        where.append("(" + " OR ".join(ip_clauses) + ")")
 
         # ---------- Filters ----------
         filters = ast.get("filters")
@@ -279,7 +287,7 @@ class SQLBuilder:
         self.joins[j] = None
 
 
-def parse_query(query: str):
+def parse_query(hlist: list[str], query: str):
     if not query or not query.strip():
         raise ValueError("empty query")
 
@@ -287,10 +295,10 @@ def parse_query(query: str):
     tree = parser.parse(query)
     print(tree.pretty())
     ast = QueryTransformer().transform(tree)
-    q = SQLBuilder().build(ast)
+    q = SQLBuilder().build(hlist, ast)
     return q
 
-
+# TODO: remove the IP field, we dont need it
 def get_grammar():
     return r"""
         %import common.CNAME
@@ -338,9 +346,9 @@ class Parser:
         exp = self.transformer.transform(tree)
         return exp
 
-    def to_sql(self, q: str):
+    def to_sql(self, hlist: list[str], q: str):
         ast = self.parse(q)
-        return self.builder.build(ast)
+        return self.builder.build(hlist, ast)
 
 
 def new_transformer():

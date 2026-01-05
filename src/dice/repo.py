@@ -8,11 +8,11 @@ import duckdb
 import ujson
 import copy
 import uuid
-import queue
 
 from dice.models import Source
 from dice.helpers import new_collection
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
+from dice.store import new_inserter, store
 
 import warnings
 
@@ -22,63 +22,6 @@ type RecordsWrapper = Callable[[Any], pd.DataFrame]
 
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
-
-def save(
-    con,
-    table: str,
-    df: pd.DataFrame,
-    force: bool = False,
-    bsize: int = DEFAULT_BSIZE,
-):
-    if df.empty:
-        return
-
-    # ---- FORCE MODE: insert everything ----
-    if force:
-        df.to_sql(
-            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
-        )
-        return
-    
-    pkey = "id"
-
-    # ---- Ensure PK hash column exists ----
-    if pkey not in df.columns:
-        raise ValueError(f"DataFrame must contain a '{pkey}' primary-key hash column")
-
-    try:
-        values_clause = ", ".join(f"('{h}')" for h in df[pkey])
-
-        query = f"""
-        WITH batch_hashes({pkey}) AS (
-            VALUES {values_clause}
-        )
-        SELECT {pkey}
-        FROM batch_hashes
-        WHERE {pkey} NOT IN (
-            SELECT {pkey} FROM {table}
-        )
-        """
-
-        # fetch hashes that are not in the DB
-        new_hashes_df = con.execute(query).fetchdf()
-
-    except duckdb.CatalogException:
-        # table does not exist → insert everything
-        df.to_sql(
-            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
-        )
-        return
-
-    # ---- Filter only brand-new rows ----
-    new_hashes = set(new_hashes_df[pkey])
-    new_rows = df[df[pkey].isin(new_hashes)]
-
-    if not new_rows.empty:
-        new_rows.to_sql(
-            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
-        )
-
 
 def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     # cannot parse
@@ -269,6 +212,10 @@ class Repository:
 
     def get_connection(self) -> duckdb.DuckDBPyConnection:
         return self.connector.get_connection()
+    
+    def set_sources_path(self, path: str | None) -> 'Repository':
+        self._sources_path = path
+        return self
 
     def get_fingerprints(
         self, *host: str, normalize: bool = False, **kwargs
@@ -387,22 +334,26 @@ class Repository:
         tab = f"records_{src.name}_{src.id}"
         con = self.get_connection()
 
-        print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
-        for c in tqdm(chain([peek], c_gen)):
-            save(con, tab, self._fmt(c, oc, ic), force=True, bsize=src._batch_size)
-            del c
+        insert_conf={"con": con, "table": tab, "force": True, "bsize": src._batch_size}
+        store_conf={"dir": self._sources_path, "fname": src.name}
+
+        with store(store_conf, insert_conf) as s:
+            print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
+            for c in tqdm(chain([peek], c_gen)):
+                s.save(self._fmt(c, oc, ic))
+                del c
         self._rebuild_records_view()
 
     def save_models(self, *items: Any) -> None:
         if not items:
             return
         table = items[0].table()
-        save(
-            self.get_connection(), df=with_items(*items), table=table
-        )
+        cb = new_inserter(self.get_connection(), table=table)
+        cb(with_items(*items))
 
     def add_hosts(self, hosts: pd.DataFrame) -> None:
-        save(self.get_connection(), df=hosts, table="hosts")
+        cb = new_inserter(self.get_connection(), table="hosts")
+        cb(hosts)
 
     def with_view(self, name: str, q: str) -> "Repository":
         c = copy.copy(self)
@@ -449,7 +400,10 @@ def new_repository(connector: Connector) -> Repository:
     return Repository(connector)
 
 def load_repository(
-    sources: list[Source] = [], db: str | None = None, read_only: bool = False
+    sources: list[Source] = [], 
+    db: str | None = None, 
+    read_only: bool = False,
+    save: str | None = None,
 ) -> Repository:
     """
     Create a repository from a list of sources.
@@ -457,5 +411,6 @@ def load_repository(
     """
     connector = Connector(db, read_only=read_only)
     repo = new_repository(connector)
+    repo.set_sources_path(save)
     repo.add_sources(*sources)
     return repo

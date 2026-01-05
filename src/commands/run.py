@@ -1,9 +1,12 @@
+from typing import Optional
 from dice.config import MFACTORY, DEFAULT_MODULES_DIR
 from dice.module import new_component_manager, load_registry
 from dice.modules import registry as core
 
 import dice
 import typer
+
+from dice.repo import load_repository
 
 def parse_command(cmd: str):
     ts = MFACTORY.all()
@@ -48,6 +51,12 @@ def run(
             "--registry",
             help="Path to the directory containing module resitry"
         ),
+        save: Optional[str] = typer.Option(
+            None,
+            "-s"
+            "--sources-output",
+            help="Path to sources directory. Save sources locally outside the database"
+        )
     ):
     if not (command or components):
         raise Exception("command or componets required. DICE needs to know what to do")
@@ -69,5 +78,7 @@ def run(
         manager.info(mods)
         engine.info()
         return
-    engine.run(db=database)
+
+    repo = load_repository(db=database, save=save)
+    engine.run(repo)
     

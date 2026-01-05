@@ -61,7 +61,10 @@ class LabConf:
 
         for m in matches:
             m.color = self.color
-
+        
+        if not self.show:
+            for m in matches:
+                m.text = ""
 
 @dataclass
 class LabelCollection:
