@@ -1,6 +1,6 @@
 from typing import Optional
 from dice.config import MFACTORY, DEFAULT_MODULES_DIR
-from dice.module import new_component_manager, load_registry
+from dice.module import load_registry_plugins, new_component_manager, load_registry
 from dice.modules import registry as core
 
 import dice
@@ -51,6 +51,11 @@ def run(
             "--registry",
             help="Path to the directory containing module resitry"
         ),
+        plugins: str | None = typer.Option(
+            None,
+            "--plugins",
+            help="Load module registries as plugins"
+        ),
         save: Optional[str] = typer.Option(
             None,
             "-s"
@@ -71,6 +76,11 @@ def run(
     # plugin modules
     if registry and (reg := load_registry(registry)):
         manager.register(reg)
+
+    # registry plugins
+    if plugins and (regs := load_registry_plugins(plugins)):
+        for r in regs:
+            manager.register(r)
 
     cb = manager.build(types=cc, modules=mods)
     engine = dice.new_engine(*cb)

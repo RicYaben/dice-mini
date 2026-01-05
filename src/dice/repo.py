@@ -289,32 +289,34 @@ class Repository:
     def _fmt(
         self, df: pd.DataFrame, oc: list[str] = [], ic: list[str] = []
     ) -> pd.DataFrame:
+        
+        # convert to string dict and list cols
         for col in oc:
             df[col] = df[col].map(
                 lambda x: ujson.dumps(x) if isinstance(x, (dict, list)) else x
             )
 
+        # convert to int64 numeric cols
         for col in ic:
-            df[col] = pd.to_numeric(df[col], errors="coerce").astype(
-                "Int64", copy=False
-            )
+            df[col] = pd.to_numeric(df[col], errors="coerce", dtype_backend="pyarrow", downcast="float")
 
         df["id"] = [uuid.uuid4().hex for _ in range(len(df))]
 
         return df
 
     def _get_fmt_columns(self, df: pd.DataFrame) -> tuple[list[str], list[str]]:
-        oc = []
-
-        n = min(50, len(df))
-        print(f"sampling source with {n}/{len(df)}")
+        n = min(1000, len(df))
+        print(f"polling source with {n}/{len(df)}")
         s = df.sample(n)
 
+        # object cols
+        oc = []
         for col in df.select_dtypes(include=["object"]).columns:
             if s[col].apply(lambda x: isinstance(x, (dict, list))).any():
                 oc.append(col)
 
-        ic = list(df.select_dtypes(include=["int", "Int64", "Int32"]).columns)
+        # numeric cols
+        ic = list(df.select_dtypes(include=["number"]).columns)
         return oc, ic
 
     def add_sources(self, *sources: Source):
@@ -330,9 +332,10 @@ class Repository:
             print(f"empty source: {src.name}")
             return
 
+        con = self.get_connection()
+
         oc, ic = self._get_fmt_columns(peek)
         tab = f"records_{src.name}_{src.id}"
-        con = self.get_connection()
 
         insert_conf={"con": con, "table": tab, "force": True, "bsize": src._batch_size}
         store_conf={"dir": self._sources_path, "fname": src.name}
@@ -340,7 +343,8 @@ class Repository:
         with store(store_conf, insert_conf) as s:
             print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
             for c in tqdm(chain([peek], c_gen)):
-                s.save(self._fmt(c, oc, ic))
+                d = self._fmt(c, oc, ic)
+                s.save(d)
                 del c
         self._rebuild_records_view()
 

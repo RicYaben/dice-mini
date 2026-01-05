@@ -10,7 +10,6 @@ authors = [{ name = "Ricardo Yaben", email = "rmyl@dtu.dk" }]
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.12"
-
 dependencies = [
     "pandas",
     "duckdb",

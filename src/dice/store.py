@@ -49,15 +49,18 @@ def new_inserter(
 ) -> Callable[[pd.DataFrame], None]:
     'returns a callback to insert chunked dfs into a database'
 
+    def insert(df):
+        df.to_sql(
+            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
+        )
+
     def cb(df: pd.DataFrame) -> None:
         if df.empty:
             return
 
         # ---- FORCE MODE: insert everything ----
         if force:
-            df.to_sql(
-                table, con, if_exists="append", index=False, method="multi", chunksize=bsize
-            )
+            insert(df)
             return
         
         pkey = "id"
@@ -85,9 +88,7 @@ def new_inserter(
 
         except duckdb.CatalogException:
             # table does not exist → insert everything
-            df.to_sql(
-                table, con, if_exists="append", index=False, method="multi", chunksize=bsize
-            )
+            insert(df)
             return
 
         # ---- Filter only brand-new rows ----
@@ -95,9 +96,7 @@ def new_inserter(
         new_rows = df[df[pkey].isin(new_hashes)]
 
         if not new_rows.empty:
-            new_rows.to_sql(
-                table, con, if_exists="append", index=False, method="multi", chunksize=bsize
-            )
+            insert(new_rows)
     return cb
 
 class Store:

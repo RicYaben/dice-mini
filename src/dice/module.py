@@ -1,4 +1,5 @@
 from importlib import import_module
+from importlib.metadata import entry_points
 import pathlib
 import json
 import fnmatch
@@ -20,7 +21,7 @@ from dice.config import (
     MType,
 )
 from dice.query import query_db, query_records
-from dice.repo import Repository, load_repository
+from dice.repo import Repository
 from dice.models import Fingerprint, FingerprintLabel, HostTag, Source, Label, Tag
 from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
 
@@ -611,3 +612,12 @@ def load_registry(p: str):
 
     registry = import_module(pp.name)
     return registry.registry
+
+def load_registry_plugins(group: str) -> list[ModuleRegistry]:
+    groups = []
+    plugins = entry_points(group=group)
+    for ep in plugins:
+        registry = ep.load()
+        groups.append(registry)
+    return groups
+
