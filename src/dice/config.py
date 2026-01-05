@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections import OrderedDict
 
 DATA_PREFIX: str = "data_"

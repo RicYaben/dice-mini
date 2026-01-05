@@ -1,5 +1,4 @@
 from difflib import ndiff
-import sys
 from tqdm import tqdm
 
 from dice.ast import make_parser
