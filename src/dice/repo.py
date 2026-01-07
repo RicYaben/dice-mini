@@ -1,6 +1,6 @@
 from collections import defaultdict
 from itertools import chain
-from typing import Any, Generator, Callable
+from typing import Any, Generator, Callable, Optional
 from tqdm import tqdm
 
 import pandas as pd
@@ -9,16 +9,22 @@ import ujson
 import copy
 import uuid
 
-from dice.models import Source
-from dice.helpers import new_collection
+from dice.models import Source #, Model, M_REQUIRED
+from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
 from dice.store import new_inserter, store
+from dice.events import Event, new_event
 
 import warnings
 
 warnings.simplefilter(action="ignore", category=UserWarning)
 
 type RecordsWrapper = Callable[[Any], pd.DataFrame]
+type HealthCheck = Callable[[Repository, Event], None]
+
+E_SOURCE = "source"
+E_LOAD = "load"
+E_SANITY = "sanity"
 
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
@@ -159,9 +165,13 @@ class Repository:
     _collection: duckdb.DuckDBPyRelation
 
     def __init__(
-        self, connector: Connector
+        self, 
+        connector: Connector,
+        monitor: 'Monitor',
     ) -> None:
         self.connector = connector
+        self.monitor = monitor
+        self.monitor.initialize(self)
 
     def _query(self, table: str, **kwargs) -> pd.DataFrame:
         q = f"SELECT * FROM {table}"
@@ -181,35 +191,7 @@ class Repository:
             q += " WHERE " + " AND ".join(clauses)
 
         return self.get_connection().execute(q, params).df()
-
-    def _rebuild_records_view(self) -> None:
-        tables = (
-            self.get_connection()
-            .execute("""
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_name LIKE 'records_%'
-                AND table_type = 'BASE TABLE'
-            ORDER BY table_name
-        """)
-            .fetchall()
-        )
-
-        grouped = defaultdict(list)
-        for (tname,) in tables:
-            prefix = "_".join(tname.split("_")[:-1])
-            grouped[prefix].append(tname)
-
-        for prefix, tnames in grouped.items():
-            union_sql = " UNION ALL ".join([f'SELECT * FROM "{t}"' for t in tnames])
-            try:
-                self.get_connection().execute(
-                    f'CREATE OR REPLACE VIEW "{prefix}" AS {union_sql}'
-                )
-            except Exception as e:
-                print(f"failed to rebuild records view: {prefix}")
-                raise e
-
+            
     def get_connection(self) -> duckdb.DuckDBPyConnection:
         return self.connector.get_connection()
     
@@ -346,7 +328,14 @@ class Repository:
                 d = self._fmt(c, oc, ic)
                 s.save(d)
                 del c
-        self._rebuild_records_view()
+
+        summary = {
+            "table": tab,
+            "iconf": insert_conf,
+            "sconf": store_conf,
+        }
+        event = new_event(E_SOURCE, summary)
+        self.monitor.synchronize(event)
 
     def save_models(self, *items: Any) -> None:
         if not items:
@@ -399,9 +388,157 @@ class Repository:
             res[0] if (res := con.execute(dq).fetchone()) else 0
         )  # <---- this destroys previous queries, so we need a new connection for it
         return d, self.query_batch(q, normalize, bsize)
+    
 
-def new_repository(connector: Connector) -> Repository:
-    return Repository(connector)
+class Monitor:
+    repo: Repository
+
+    def __init__(self,
+        on_init: list[HealthCheck],
+        on_synchronize: list[HealthCheck],
+    ) -> None:
+        self._on_init=on_init
+        self._on_synchronize=on_synchronize
+
+    def initialize(self, repo: Repository): 
+        self.repo = repo
+        self.load(new_event(E_LOAD))
+
+    def load(self, e: Event):
+        print("running initialization checks")
+        for check in self._on_init:
+            check(self.repo, e)
+
+    def synchronize(self, e: Event):
+        print("runnin synchronization checks")
+        for check in self._on_synchronize:
+            check(self.repo, e)
+
+    def sanity_check(self):
+        print("checking repo health")
+        e = new_event(E_SANITY)
+        self.load(e)
+        self.synchronize(e)
+
+# TODO: the event has the info about the tables to rebuild, may be wise to rebuild only those
+def rebuild_views(repo: Repository, _) -> None:
+    print("rebuilding views...")
+
+    tables = (
+        repo.get_connection()
+        .execute("""
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_name LIKE 'records_%'
+            AND table_type = 'BASE TABLE'
+        ORDER BY table_name
+    """)
+        .fetchall()
+    )
+
+    grouped = defaultdict(list)
+    for (tname,) in tables:
+        prefix = "_".join(tname.split("_")[:-1])
+        grouped[prefix].append(tname)
+
+    for prefix, tnames in grouped.items():
+        union_sql = " UNION ALL ".join([f'SELECT * FROM "{t}"' for t in tnames])
+        try:
+            repo.get_connection().execute(
+                f'CREATE OR REPLACE VIEW "{prefix}" AS {union_sql}'
+            )
+        except Exception as e:
+            print(f"failed to rebuild records view: {prefix}")
+            raise e
+        
+def get_records_views(repo: Repository) -> list[tuple[str]]:
+    return (
+        repo.get_connection()
+        .execute("""
+            SELECT table_name
+            FROM information_schema.views
+            WHERE table_name LIKE 'records_%'
+        """)
+        .fetchall()
+    )
+        
+def find_host_col(repo: Repository, table: str) -> str | None:
+    guesswork = {"ip", "saddr", "host", "addr"}
+    q = f"SELECT * FROM {table} LIMIT 0"
+    cur = repo.get_connection().execute(q)
+    cols = {desc[0].lower() for desc in cur.description}
+
+    common = guesswork & cols
+    return next(iter(common), None)
+
+
+def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) -> None:
+    if not db.startswith("records_"):
+        db = "records_"+db
+
+    if not col:
+       col = find_host_col(repo, db)
+       if not col:
+           print(f"fialed to find a host column in {db}")
+           return
+       
+    # Check if hosts table exists
+    con = repo.get_connection()
+
+    hosts_exists = con.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_name = 'hosts'
+    """).fetchone()
+
+    if hosts_exists and hosts_exists[0]:
+        q = f"""
+        SELECT DISTINCT s.{col} AS ip
+        FROM {db} AS s
+        ANTI JOIN hosts AS h
+          ON s.{col} = h.ip
+        """
+    else:
+        q = f"""
+        SELECT DISTINCT s.{col} AS ip
+        FROM {db} AS s
+        """
+
+    t, gen = repo.queryb(q)
+    if t == 0:
+        print(f"no missing hosts from {db}")
+        return
+    
+    with tqdm(total=t, desc="Hosts") as pbar:
+        pbar.write("inserting missing hosts")
+        for b in gen:
+            hosts = [new_host(ip=r.ip) for r in b.itertuples()]
+            repo.save_models(*hosts)
+        
+def add_missing_hosts(repo: Repository, e: Event):
+    print("adding missing hosts...")
+
+    if "table" not in e.summary:
+        print("adding hosts from all views...")
+        tabs = get_records_views(repo)
+        for (tab,) in tabs:
+            add_hosts_from_source(repo, tab)
+        return
+    
+    table = e.summary["table"]
+    add_hosts_from_source(repo, table)
+
+# def create_tables(models: list[Model]) -> HealthCheck:
+#     def hc(repo: Repository):
+#         for model in models:
+            
+#     return hc
+
+def new_repository(connector: Connector, monitor: Monitor) -> Repository:
+    return Repository(
+        connector=connector,
+        monitor=monitor,
+    )
 
 def load_repository(
     sources: list[Source] = [], 
@@ -414,7 +551,14 @@ def load_repository(
     - db: name of the database - if not set, load in memory
     """
     connector = Connector(db, read_only=read_only)
-    repo = new_repository(connector)
+    monitor = Monitor(
+        on_init=[],#create_tables(M_REQUIRED)],
+        on_synchronize=[
+            rebuild_views,
+            add_missing_hosts,
+        ]
+    )
+    repo = new_repository(connector, monitor)
     repo.set_sources_path(save)
     repo.add_sources(*sources)
     return repo

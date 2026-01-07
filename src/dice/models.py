@@ -174,3 +174,5 @@ class HostTag(Model):
     @classmethod
     def table(cls) -> str:
         return "host_tags"
+    
+M_REQUIRED = [Host, Tag, HostTag, Fingerprint, Label, FingerprintLabel]

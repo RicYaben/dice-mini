@@ -1,4 +1,5 @@
 import pandas as pd
+import ipaddress
 
 from dataclasses import dataclass
 from typing import Any, Generator, Iterable
@@ -55,6 +56,7 @@ def new_host_tag(host_id: str, tag_id: str, details="-", protocol: str="-", port
     return HostTag(host_id, tag_id, details, protocol, port)
 
 def new_host(ip: str, domain: str = "", prefix: str ="", asn: str = "") -> Host:
+    ipaddress.ip_address(ip) # this panics if not an ip address
     return Host(
         ip=ip,
         domain=domain, 
