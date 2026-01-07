@@ -12,7 +12,7 @@ import uuid
 from dice.models import Source #, Model, M_REQUIRED
 from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
-from dice.store import new_inserter, store
+from dice.store import OnConflict, inserter, store
 from dice.events import Event, new_event
 
 import warnings
@@ -319,8 +319,16 @@ class Repository:
         oc, ic = self._get_fmt_columns(peek)
         tab = f"records_{src.name}_{src.id}"
 
-        insert_conf={"con": con, "table": tab, "force": True, "bsize": src._batch_size}
-        store_conf={"dir": self._sources_path, "fname": src.name}
+        insert_conf={
+            "con": con, 
+            "table": tab, 
+            "policy":OnConflict.FORCE
+        }
+
+        store_conf={
+            "dir": self._sources_path, 
+            "fname": src.name
+        }
 
         with store(store_conf, insert_conf) as s:
             print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
@@ -337,15 +345,25 @@ class Repository:
         event = new_event(E_SOURCE, summary)
         self.monitor.synchronize(event)
 
-    def save_models(self, *items: Any) -> None:
+    # create or update
+    def create(
+        self, 
+        *items: Any,
+        policy: OnConflict = OnConflict.IGNORE, # update, ignore, error
+    ) -> None:
         if not items:
             return
         table = items[0].table()
-        cb = new_inserter(self.get_connection(), table=table)
+        cb = inserter(
+            self.get_connection(), 
+            table=table,
+            policy=policy,
+        )
+
         cb(with_items(*items))
 
     def add_hosts(self, hosts: pd.DataFrame) -> None:
-        cb = new_inserter(self.get_connection(), table="hosts")
+        cb = inserter(self.get_connection(), table="hosts")
         cb(hosts)
 
     def with_view(self, name: str, q: str) -> "Repository":
@@ -410,7 +428,7 @@ class Monitor:
             check(self.repo, e)
 
     def synchronize(self, e: Event):
-        print("runnin synchronization checks")
+        print("running synchronization checks")
         for check in self._on_synchronize:
             check(self.repo, e)
 
@@ -513,7 +531,8 @@ def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) 
         pbar.write("inserting missing hosts")
         for b in gen:
             hosts = [new_host(ip=r.ip) for r in b.itertuples()]
-            repo.save_models(*hosts)
+            repo.create(*hosts)
+            pbar.update(len(b))
         
 def add_missing_hosts(repo: Repository, e: Event):
     print("adding missing hosts...")

@@ -6,7 +6,15 @@ import pandas as pd
 import os
 import copy
 
-from dice.config import DEFAULT_BSIZE
+from enum import Enum
+
+class OnConflict(Enum):
+    FORCE = "force"        # blind append
+    ERROR = "error"        # raise if conflict
+    IGNORE = "ignore"      # insert only new rows
+    UPDATE = "update"      # update existing rows
+    UPSERT = "upsert"      # update + insert
+    REPLACE = "replace"    # delete + insert (full overwrite)
 
 class VoidStore(ABC):
     def store(self, _): ...
@@ -41,62 +49,98 @@ def make_store(dir: str | None = None, fname: str | None = None):
     s = LocalStore(dir).open(fname)
     return s
 
-def new_inserter(
+def merge_sql(
+    table: str,
+    pkey: str,
+    cols: list[str],
+    policy: OnConflict,
+) -> str:
+    non_pk = [c for c in cols if c != pkey]
+
+    if policy == OnConflict.FORCE:
+        # dumb
+        return f"""
+        INSERT INTO {table} ({", ".join(cols)})
+        SELECT {", ".join(cols)} FROM src_df
+        """
+
+    if policy == OnConflict.ERROR:
+        # pure insert, let DB error
+        return f"""
+        INSERT INTO {table} ({", ".join(cols)})
+        SELECT {", ".join(cols)} FROM src_df
+        """
+
+    if policy == OnConflict.IGNORE:
+        # insert only new
+        return f"""
+        MERGE INTO {table} AS t
+        USING src_df AS s
+        ON t.{pkey} = s.{pkey}
+        WHEN NOT MATCHED THEN
+          INSERT ({", ".join(cols)})
+          VALUES ({", ".join(f"s.{c}" for c in cols)})
+        """
+
+    if policy == OnConflict.UPDATE:
+        # update conflicting
+        return f"""
+        MERGE INTO {table} AS t
+        USING src_df AS s
+        ON t.{pkey} = s.{pkey}
+        WHEN MATCHED THEN
+          UPDATE SET {", ".join(f"{c} = s.{c}" for c in non_pk)}
+        """
+
+    if policy == OnConflict.UPSERT:
+        # update and merge
+        return f"""
+        MERGE INTO {table} AS t
+        USING src_df AS s
+        ON t.{pkey} = s.{pkey}
+        WHEN MATCHED THEN
+          UPDATE SET {", ".join(f"{c} = s.{c}" for c in non_pk)}
+        WHEN NOT MATCHED THEN
+          INSERT ({", ".join(cols)})
+          VALUES ({", ".join(f"s.{c}" for c in cols)})
+        """
+
+    if policy == OnConflict.REPLACE:
+        # replace all
+        return f"""
+        DELETE FROM {table}
+        WHERE {pkey} IN (SELECT {pkey} FROM src_df);
+
+        INSERT INTO {table} ({", ".join(cols)})
+        SELECT {", ".join(cols)} FROM src_df
+        """
+
+    raise ValueError(f"Unknown conflict policy: {policy}")
+
+
+def inserter(
     con: duckdb.DuckDBPyConnection,
     table: str,
-    force: bool = False,
-    bsize: int = DEFAULT_BSIZE,
+    *,
+    pkey: str = "id",
+    policy: OnConflict = OnConflict.UPSERT,
 ) -> Callable[[pd.DataFrame], None]:
-    'returns a callback to insert chunked dfs into a database'
-
-    def insert(df):
-        df.to_sql(
-            table, con, if_exists="append", index=False, method="multi", chunksize=bsize
-        )
 
     def cb(df: pd.DataFrame) -> None:
         if df.empty:
             return
 
-        # ---- FORCE MODE: insert everything ----
-        if force:
-            insert(df)
-            return
-        
-        pkey = "id"
+        con.register("src_df", df)
 
-        # ---- Ensure PK hash column exists ----
-        if pkey not in df.columns:
-            raise ValueError(f"DataFrame must contain a '{pkey}' primary-key hash column")
+        sql = merge_sql(
+            table=table,
+            pkey=pkey,
+            cols=df.columns.tolist(),
+            policy=policy,
+        )
 
-        try:
-            values_clause = ", ".join(f"('{h}')" for h in df[pkey])
+        con.execute(sql)
 
-            query = f"""
-            WITH batch_hashes({pkey}) AS (
-                VALUES {values_clause}
-            )
-            SELECT {pkey}
-            FROM batch_hashes
-            WHERE {pkey} NOT IN (
-                SELECT {pkey} FROM {table}
-            )
-            """
-
-            # fetch hashes that are not in the DB
-            new_hashes_df = con.execute(query).fetchdf()
-
-        except duckdb.CatalogException:
-            # table does not exist → insert everything
-            insert(df)
-            return
-
-        # ---- Filter only brand-new rows ----
-        new_hashes = set(new_hashes_df[pkey])
-        new_rows = df[df[pkey].isin(new_hashes)]
-
-        if not new_rows.empty:
-            insert(new_rows)
     return cb
 
 class Store:
@@ -107,7 +151,7 @@ class Store:
 
     def __enter__(self) -> 'Store':
         self.storage = make_store(**self.sconf)
-        self.inserter = new_inserter(**self.iconf)
+        self.inserter = inserter(**self.iconf)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):

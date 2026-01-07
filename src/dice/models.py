@@ -41,6 +41,14 @@ class Model(ABC):
     @classmethod
     def table(cls) -> str:
         raise NotImplementedError
+    
+    @classmethod
+    def from_series(cls, row: pd.Series) -> "Model":
+        return cls(**row.to_dict())
+    
+    @classmethod
+    def from_dataframe(cls, df: pd.DataFrame) -> list["Model"]:
+        return [cls.from_series(row) for _, row in df.iterrows()]
 
 @dataclass
 class Source(Model):

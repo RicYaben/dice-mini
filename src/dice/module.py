@@ -24,6 +24,7 @@ from dice.query import query_db, query_records
 from dice.repo import Repository
 from dice.models import Fingerprint, FingerprintLabel, HostTag, Source, Label, Tag
 from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
+from dice.store import OnConflict
 
 type ModuleInit = Callable[["Module"], None]
 type ModuleHandler = Callable[["Module"], None]
@@ -50,15 +51,19 @@ class Module:
 
     # cache, temporarely stores items
     _cache: list = field(default_factory=list)
+    _policy: OnConflict = OnConflict.FORCE
 
     def init(self, repo: Repository) -> None:
         self._repo = repo
         return self._init(self)
+    
+    def set_store_policy(self, policy: OnConflict):
+        self._policy = policy
 
     def flush(self) -> None:
         "flushes remaining items in the cache"
         repo = self.repo()
-        repo.save_models(*self._cache)
+        repo.create(*self._cache, policy=self._policy)
         self._cache = []
 
     def handle(self) -> None:
@@ -80,12 +85,12 @@ class Module:
     ):
         lab = new_label(self.name, name, short, description, mitigation)
         self._labels[name] = lab
-        self.repo().save_models(lab)
+        self.repo().create(lab)
 
     def register_tag(self, name: str, description: str = "-") -> None:
         tag = new_tag(self.name, name, description)
         self._tags[name] = tag
-        self.repo().save_models(tag)
+        self.repo().create(tag)
     # ----
 
     def make_label(self, fp: str, lab: str) -> FingerprintLabel:
@@ -535,7 +540,7 @@ def make_cls_handler(
             for _, fp in df.iterrows():
                 if lab := cls_cb(fp):
                     labs.append(mod.make_label(str(fp["id"]), lab))
-            repo.save_models(*labs)
+            repo.create(*labs)
 
         q = query_db("fingerprints", protocol=protocol)
         mod.with_pbar(handler, q)
