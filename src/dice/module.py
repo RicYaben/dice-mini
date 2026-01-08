@@ -51,6 +51,7 @@ class Module:
 
     # cache, temporarely stores items
     _cache: list = field(default_factory=list)
+    _temp_size: int = DEFAULT_BSIZE
     _policy: OnConflict = OnConflict.FORCE
 
     def init(self, repo: Repository) -> None:
@@ -131,18 +132,27 @@ class Module:
         handler: Callable[[pd.DataFrame], None],
         q: str,
         bsize: int = DEFAULT_BSIZE,
+        desc: str | None = None,
     ) -> None:
-        t, gen = self.repo().queryb(q)
-        with tqdm(total=t, desc=f"{self.name}") as pbar:
+        self._temp_size = bsize
+        if not desc:
+            desc = self.name
+            
+        t, gen = self.repo().queryb(q, bsize=bsize)
+        with tqdm(total=t, desc=desc) as pbar:
             pbar.write(f"fetching in batches ({bsize}/b)")
             for b in gen:
+                size = len(b.index)
                 handler(b)
-                pbar.update(len(b.index))
+                pbar.update(size)
                 del b
+
+        self.flush()
+        self._temp_size = DEFAULT_BSIZE
 
     def store(self, *items) -> None:
         self._cache.extend(items)
-        if len(self._cache) >= DEFAULT_BSIZE:
+        if len(self._cache) >= self._temp_size:
             self.flush()
 
     def itemize(
