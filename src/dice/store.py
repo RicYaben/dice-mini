@@ -85,11 +85,10 @@ def merge_sql(
     if policy == OnConflict.UPDATE:
         # update conflicting
         return f"""
-        MERGE INTO {table} AS t
-        USING src_df AS s
-        ON t.{pkey} = s.{pkey}
-        WHEN MATCHED THEN
-          UPDATE SET {", ".join(f"{c} = s.{c}" for c in non_pk)}
+        UPDATE {table} AS t
+        SET {", ".join(f"{c} = s.{c}" for c in non_pk)}
+        FROM src_df AS s
+        WHERE t.{pkey} = s.{pkey}
         """
 
     if policy == OnConflict.UPSERT:
@@ -99,7 +98,7 @@ def merge_sql(
         USING src_df AS s
         ON t.{pkey} = s.{pkey}
         WHEN MATCHED THEN
-          UPDATE SET {", ".join(f"{c} = s.{c}" for c in non_pk)}
+          UPDATE SET {", ".join(f"t.{c} = s.{c}" for c in non_pk)}
         WHEN NOT MATCHED THEN
           INSERT ({", ".join(cols)})
           VALUES ({", ".join(f"s.{c}" for c in cols)})
