@@ -9,10 +9,10 @@ import ujson
 import copy
 import uuid
 
-from dice.models import Source #, Model, M_REQUIRED
+from dice.models import Model, Source, M_REQUIRED
 from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
-from dice.store import OnConflict, inserter, store
+from dice.store import OnConflict, inserter, store, table_exists
 from dice.events import Event, new_event
 
 import warnings
@@ -116,8 +116,8 @@ class Connector:
 
     def copy(self, table: str, src: str) -> None:
         con = self.get_connection()
-        con.execute(f"DROP TABLE IF EXISTS main.{table}")
-        con.execute(f"CREATE TABLE main.{table} AS SELECT * FROM {src}.{table}")
+        con.execute(f"DROP TABLE IF EXISTS 'main.{table}'")
+        con.execute(f"CREATE TABLE 'main.{table}' AS SELECT * FROM '{src}.{table}'")
 
     def _extensions(self, conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute("INSTALL inet")
@@ -174,7 +174,7 @@ class Repository:
         self.monitor.initialize(self)
 
     def _query(self, table: str, **kwargs) -> pd.DataFrame:
-        q = f"SELECT * FROM {table}"
+        q = f"SELECT * FROM '{table}'"
         clauses = []
         params = []
 
@@ -435,7 +435,6 @@ class Monitor:
     def sanity_check(self):
         print("checking repo health")
         e = new_event(E_SANITY)
-        self.load(e)
         self.synchronize(e)
 
 # TODO: the event has the info about the tables to rebuild, may be wise to rebuild only those
@@ -482,7 +481,7 @@ def get_records_views(repo: Repository) -> list[tuple[str]]:
         
 def find_host_col(repo: Repository, table: str) -> str | None:
     guesswork = {"ip", "saddr", "host", "addr"}
-    q = f"SELECT * FROM {table} LIMIT 0"
+    q = f"SELECT * FROM '{table}' LIMIT 0"
     cur = repo.get_connection().execute(q)
     cols = {desc[0].lower() for desc in cur.description}
 
@@ -492,7 +491,7 @@ def find_host_col(repo: Repository, table: str) -> str | None:
 
 def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) -> None:
     if not db.startswith("records_"):
-        db = "records_"+db
+        db = f"'records_{db}'"
 
     if not col:
        col = find_host_col(repo, db)
@@ -502,14 +501,7 @@ def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) 
        
     # Check if hosts table exists
     con = repo.get_connection()
-
-    hosts_exists = con.execute("""
-        SELECT COUNT(*)
-        FROM information_schema.tables
-        WHERE table_name = 'hosts'
-    """).fetchone()
-
-    if hosts_exists and hosts_exists[0]:
+    if table_exists(con, "hosts"):
         q = f"""
         SELECT DISTINCT s.{col} AS ip
         FROM {db} AS s
@@ -547,11 +539,21 @@ def add_missing_hosts(repo: Repository, e: Event):
     table = e.summary["table"]
     add_hosts_from_source(repo, table)
 
-# def create_tables(models: list[Model]) -> HealthCheck:
-#     def hc(repo: Repository):
-#         for model in models:
-            
-#     return hc
+def create_tables(models: list[Model]) -> HealthCheck:
+    print(f"creating required tables: {','.join([m.table() for m in models])}")
+    # create a fake module
+    def hc(repo: Repository, _):
+        con = repo.get_connection()
+        for model in models:
+            table = model.table()
+            ins = inserter(
+                con,
+                table,
+                pkey=model.primary_key(),
+                policy=OnConflict.IGNORE
+            )
+            ins(model.mock())
+    return hc
 
 def new_repository(connector: Connector, monitor: Monitor) -> Repository:
     return Repository(
@@ -565,13 +567,9 @@ def load_repository(
     read_only: bool = False,
     save: str | None = None,
 ) -> Repository:
-    """
-    Create a repository from a list of sources.
-    - db: name of the database - if not set, load in memory
-    """
     connector = Connector(db, read_only=read_only)
     monitor = Monitor(
-        on_init=[],#create_tables(M_REQUIRED)],
+        on_init=[create_tables(M_REQUIRED)],
         on_synchronize=[
             rebuild_views,
             add_missing_hosts,

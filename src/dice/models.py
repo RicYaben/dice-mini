@@ -8,6 +8,9 @@ from dataclasses import KW_ONLY, dataclass, asdict, field
 from abc import ABC
 from typing import Generator
 
+def mock_df(**cols) -> pd.DataFrame:
+    return pd.DataFrame([cols])
+
 @dataclass
 class Model(ABC):
     _: KW_ONLY
@@ -49,6 +52,10 @@ class Model(ABC):
     @classmethod
     def from_dataframe(cls, df: pd.DataFrame) -> list["Model"]:
         return [cls.from_series(row) for _, row in df.iterrows()]
+    
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        raise NotImplementedError
 
 @dataclass
 class Source(Model):
@@ -90,6 +97,15 @@ class Host(Model):
     def table(cls) -> str:
         return "hosts"
     
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            ip="0.0.0.0",
+            domain="__mock__",
+            prefix="0.0.0.0/0",
+            asn="AS0",
+        )
+    
 @dataclass
 class Fingerprint(Model):
     # Host (ip)
@@ -113,6 +129,17 @@ class Fingerprint(Model):
     def table(cls) -> str:
         return "fingerprints"
     
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            host="0.0.0.0",
+            record_id="__mock__",
+            module_name="__mock__",
+            data="{}",
+            port=0,
+            protocol="__mock__",
+        )
+    
 @dataclass
 class Label(Model):
     # name of the label
@@ -133,6 +160,16 @@ class Label(Model):
     @classmethod
     def table(cls) -> str:
         return "labels"
+    
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            name="__mock__",
+            short="__mock__",
+            description="__mock__",
+            mitigation="__mock__",
+            module_name="__mock__",
+        )
 
 @dataclass
 class FingerprintLabel(Model):
@@ -148,6 +185,13 @@ class FingerprintLabel(Model):
     @classmethod
     def table(cls) -> str:
         return "fingerprint_labels"
+    
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            fingerprint_id="__mock__",
+            label_id="__mock__",
+        )
 
 @dataclass
 class Tag(Model):
@@ -162,6 +206,14 @@ class Tag(Model):
     @classmethod
     def table(cls) -> str:
         return "tags"
+    
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            name="__mock__",
+            description="__mock__",
+            module_name="__mock__",
+        )
 
 @dataclass
 class HostTag(Model):
@@ -183,4 +235,15 @@ class HostTag(Model):
     def table(cls) -> str:
         return "host_tags"
     
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            host="0.0.0.0",
+            tag_id="__mock__",
+            details="__mock__",
+            protocol="__mock__",
+            port=0,
+        )
+
+
 M_REQUIRED = [Host, Tag, HostTag, Fingerprint, Label, FingerprintLabel]

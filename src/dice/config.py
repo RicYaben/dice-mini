@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from collections import OrderedDict
-import logging
 
+import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
