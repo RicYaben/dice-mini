@@ -13,7 +13,7 @@ from dice.models import Model, Source, M_REQUIRED
 from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
 from dice.store import OnConflict, inserter, store, table_exists
-from dice.events import Event, new_event
+from dice.events import Event, new_event, EventType
 
 import warnings
 
@@ -21,10 +21,6 @@ warnings.simplefilter(action="ignore", category=UserWarning)
 
 type RecordsWrapper = Callable[[Any], pd.DataFrame]
 type HealthCheck = Callable[[Repository, Event], None]
-
-E_SOURCE = "source"
-E_LOAD = "load"
-E_SANITY = "sanity"
 
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
@@ -342,7 +338,7 @@ class Repository:
             "iconf": insert_conf,
             "sconf": store_conf,
         }
-        event = new_event(E_SOURCE, summary)
+        event = new_event(EventType.SOURCE, summary)
         self.monitor.synchronize(event)
 
     # create or update
@@ -420,7 +416,7 @@ class Monitor:
 
     def initialize(self, repo: Repository): 
         self.repo = repo
-        self.load(new_event(E_LOAD))
+        self.load(new_event(EventType.LOAD))
 
     def load(self, e: Event):
         print("running initialization checks")
@@ -434,7 +430,7 @@ class Monitor:
 
     def sanity_check(self):
         print("checking repo health")
-        e = new_event(E_SANITY)
+        e = new_event(EventType.SANITY)
         self.synchronize(e)
 
 # TODO: the event has the info about the tables to rebuild, may be wise to rebuild only those
