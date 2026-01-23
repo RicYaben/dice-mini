@@ -7,6 +7,7 @@ from dice.config import DEFAULT_BSIZE
 
 insert_app = typer.Typer(help="Insert a source into the database")
 
+
 def parse_source(entry: str):
     """
     Split entry into 1-3 fields.
@@ -39,34 +40,31 @@ def parse_source(entry: str):
 
     return (fpath, name, study)
 
+
 @insert_app.command()
 def add(
-    source: List[str] = typer.Option(
-        [], 
-        "-s", 
-        "--source", 
-        help="source path and name"
-    ),
+    source: List[str] = typer.Option([], "-s", "--source", help="source path and name"),
     database: str | None = typer.Option(
-        None, 
-        "-db",
-        "--database",
-        help="path to database"
+        None, "-db", "--database", help="path to database"
     ),
     batch: int = typer.Option(
         DEFAULT_BSIZE,
         "-b",
         "--batch",
-        help="batch size to read from each source. default 50K"
+        help="batch size to read from each source. default 50K",
+    ),
+    resume: bool = typer.Option(
+        True,
+        "--resume"
     )
 ):
     repo = load_repository(db=database)
     if not source:
         print("no source to insert")
         raise typer.Abort()
-    
+
     srcs = []
     for s in source:
         spath, sname, study = parse_source(s)
-        srcs = make_sources(spath, name=sname, study=study, batch_size=batch) 
-    repo.add_sources(*srcs)
+        srcs = make_sources(spath, name=sname, study=study, batch_size=batch)
+    repo.add_sources(srcs, resume)

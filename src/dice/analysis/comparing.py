@@ -165,7 +165,7 @@ def dump(df, path):
             f.write("\n")
 
 
-def compare(repo: Repository,  query: str, dst: str, fields: list[str], output: str="comparison.jsonl") -> Source:
+def compare(repo: Repository, query: str, dst: str, fields: list[str], output: str="comparison.jsonl") -> Source:
     parser = make_parser()
     q = parser.to_sql(query)
 

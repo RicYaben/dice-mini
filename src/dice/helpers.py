@@ -7,19 +7,12 @@ from typing import Any, Generator, Iterable
 from dice.models import Source, Label, Model, Fingerprint, FingerprintLabel, Tag, HostTag, Host
 from dice.loaders import Loader, jsonl_loader
 
-def new_source(name: str, fpath: str | list[str], study: str, loader: Loader = jsonl_loader, batch_size: int = 10_000) -> Source:
-    p: list[str] = []
-    match fpath:
-        case str():
-            p=[fpath]
-        case list():
-            p=fpath
-
+def new_source(name: str, fpath: str, study: str, loader: Loader = jsonl_loader, batch_size: int = 10_000) -> Source:
     return Source(
         name=name,
-        paths=p,
+        path=fpath,
         study=study,
-        _batch_size=batch_size,
+        batch_size=batch_size,
         _handler=loader
     ) 
 

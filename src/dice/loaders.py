@@ -5,32 +5,31 @@ from typing import Generator, Iterable
 from collections.abc import Callable
 from pathlib import Path
 
-type Loader = Callable[[str, str, str, list[str], int], Generator[pd.DataFrame, None, None]]
+type Loader = Callable[[str, str, str, str, int], Generator[pd.DataFrame, None, None]]
 
-def walk(paths):
+def walk(p: str):
     """
     Iterate over a list of paths that can be:
       - Directories → yields all files in them recursively
       - Glob patterns → yields matches
       - File paths → yields the file if it exists
     """
-    for p in paths:
-        path = Path(p)
-        
-        if "*" in p or "?" in p or "[" in p:
-            # Glob pattern
-            for match in glob.iglob(p, recursive=True):
-                match_path = Path(match)
-                if match_path.is_file():
-                    yield match_path
-        elif path.is_dir():
-            # Directory → recursively yield files
-            for f in path.rglob("*"):
-                if f.is_file():
-                    yield f
-        elif path.is_file():
-            # Direct file path
-            yield path
+    path = Path(p)
+    
+    if "*" in p or "?" in p or "[" in p:
+        # Glob pattern
+        for match in glob.iglob(p, recursive=True):
+            match_path = Path(match)
+            if match_path.is_file():
+                yield match_path
+    elif path.is_dir():
+        # Directory → recursively yield files
+        for f in path.rglob("*"):
+            if f.is_file():
+                yield f
+    elif path.is_file():
+        # Direct file path
+        yield path
 
 def extract_protocol_data(d: dict) -> tuple[str, dict]:
     try:
@@ -51,10 +50,9 @@ def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]
         case _:
             return lambda x: x
 
-def jsonl_loader(source_id: str, source_name: str, study: str, paths: list[str], batch_size: int):
+def jsonl_loader(source_id: str, source_name: str, study: str, path: str, batch_size: int):
     norm = get_loader_normalizer(source_name)
-
-    for p in walk(paths):
+    for p in walk(path):
         # NOTE: engine pyarrow does not support chunking
         for chunk in pd.read_json(p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size):
             chunk["path"] = str(p)

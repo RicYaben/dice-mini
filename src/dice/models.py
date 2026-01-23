@@ -63,22 +63,80 @@ class Source(Model):
     name: str
     # id of the study
     study: str
-    # path to the source: a list of directories, or files. Accepts globs.
+    # path to the source: a glob
     # Example: "dir/*/*.jsonl"
-    paths: list[str]
+    path: str
 
     # an explicit loader to use for this source
     _handler: Loader
 
     # size of the batches for loading and saving
-    _batch_size: int = DEFAULT_BSIZE
+    batch_size: int = DEFAULT_BSIZE
 
     @classmethod
     def table(cls) -> str:
         return "sources"
 
     def load(self) -> Generator[pd.DataFrame, None, None]:
-        return self._handler(self.id, self.name, self.study, self.paths, self._batch_size)
+        return self._handler(self.id, self.name, self.study, self.path, self.batch_size)
+    
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            name="__mock__",
+            study="__mock__",
+            paths=["__mock__"],
+            batch_size=0
+        )
+
+    @classmethod
+    def primary_key(cls):
+        return ("name",)
+    
+@dataclass
+class Counters(Model):
+    name: str
+    value: int
+
+    @classmethod
+    def table(cls) -> str: return "counters"
+
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            name="__mock__",
+            value=0,
+        )
+    
+    @classmethod
+    def primary_key(cls):
+        return ("name",)
+
+@dataclass
+class Cursor(Model):
+    source: str
+    index: int
+
+    @classmethod
+    def primary_key(cls):
+        return ("source",)
+
+    @classmethod
+    def table(cls) -> str:
+        return "source_cursor"
+    
+    @classmethod
+    def mock(cls) -> pd.DataFrame:
+        return mock_df(
+            source="__mock__",
+            index=0
+        )
+    
+    def reset(self):
+        self.index=0
+    
+    def update(self, idx: int=1):
+        self.index+=idx
     
 @dataclass
 class Host(Model):
@@ -246,4 +304,14 @@ class HostTag(Model):
         )
 
 
-M_REQUIRED = [Host, Tag, HostTag, Fingerprint, Label, FingerprintLabel]
+M_REQUIRED = [
+    Host, 
+    Tag, 
+    HostTag, 
+    Fingerprint, 
+    Label, 
+    FingerprintLabel, 
+    Counters,
+    Cursor,
+    Source,
+]

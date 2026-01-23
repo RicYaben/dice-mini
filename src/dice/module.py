@@ -22,7 +22,7 @@ from dice.config import (
 )
 from dice.query import query_db, query_records
 from dice.repo import Repository
-from dice.models import Fingerprint, FingerprintLabel, HostTag, Source, Label, Tag
+from dice.models import Fingerprint, FingerprintLabel, HostTag, Label, Tag
 from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
 from dice.store import OnConflict
 
@@ -255,9 +255,7 @@ class Engine:
     def run(
         self,
         repo: Repository,
-        srcs: list[Source] = [],
     ) -> Repository:
-        repo.add_sources(*srcs)
 
         def fcomp(t):
             return lambda c: c.c_type == t
@@ -340,17 +338,6 @@ def new_module(
     t: MType, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
 ) -> Module:
     return Module(t, name, init, handler)
-
-
-# ---
-# def new_plugin(
-#         name: str,
-#         scanner: Module | None = None,
-#         classifier: Module | None = None,
-#         fingerprinter: Module | None = None,
-#         tagger: Module | None = None,
-#     ): raise NotImplementedError
-# ---
 
 
 def new_signature(t: MType, name: str, *modules: Module) -> Signature:

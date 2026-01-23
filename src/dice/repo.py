@@ -1,5 +1,4 @@
 from collections import defaultdict
-from itertools import chain
 from typing import Any, Generator, Callable, Optional
 from tqdm import tqdm
 
@@ -9,6 +8,8 @@ import ujson
 import copy
 import uuid
 
+from dice.connector import Connector
+from dice.health import HealthCheck, HealthMonitor, new_health_monitor
 from dice.models import Model, Source, M_REQUIRED
 from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
@@ -16,11 +17,15 @@ from dice.store import OnConflict, inserter, store, table_exists
 from dice.events import Event, new_event, EventType
 
 import warnings
+import logging
+
+from dice.watcher import Watcher, new_watcher
 
 warnings.simplefilter(action="ignore", category=UserWarning)
 
+logger = logging.getLogger(__name__)
+
 type RecordsWrapper = Callable[[Any], pd.DataFrame]
-type HealthCheck = Callable[[Repository, Event], None]
 
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
@@ -69,105 +74,19 @@ def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
     return normalize_data(df, DATA_PREFIX)
 
 
-class Connector:
-    def __init__(
-        self,
-        db_path: str | None,
-        name: str = "-",
-        read_only: bool = False,
-        config: dict = {},
-    ) -> None:
-        self.name = name
-        self.db_path: str = db_path if db_path else ":memory:"
-        self.readonly = read_only
-        self.config = config
-
-        self.con: duckdb.DuckDBPyConnection | None = None
-
-    def init_con(self, con, readonly: bool):
-        self._extensions(con)
-        self._pragmas(con)
-        if not readonly:
-            self._macros(con)
-
-    def get_connection(self) -> duckdb.DuckDBPyConnection:
-        if not self.con:
-            self.con = self.new_connection()
-        return self.con
-
-    def new_connection(self) -> duckdb.DuckDBPyConnection:
-        con = duckdb.connect(
-            self.db_path, read_only=self.readonly
-        )  # config=self.config)
-
-        self.init_con(con, self.readonly)
-        return con
-
-    def with_connection(self, name: str) -> "Connector":
-        return Connector(self.db_path, name, self.readonly, self.config)
-    
-    def attach(self, path: str, name: str) -> None:
-        con = self.get_connection()
-        con.execute(f"ATTACH '{path}' AS {name};")
-
-    def copy(self, table: str, src: str) -> None:
-        con = self.get_connection()
-        con.execute(f"DROP TABLE IF EXISTS 'main.{table}'")
-        con.execute(f"CREATE TABLE 'main.{table}' AS SELECT * FROM '{src}.{table}'")
-
-    def _extensions(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("INSTALL inet")
-        conn.execute("LOAD inet")
-
-    def _pragmas(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("PRAGMA temp_directory='./duckdb_tmp';")
-        conn.execute("PRAGMA threads=8;")
-        conn.execute("PRAGMA memory_limit='10GB';")
-        conn.execute("PRAGMA max_memory='10GB';")
-        conn.execute("PRAGMA preserve_insertion_order=FALSE;")
-        conn.execute("PRAGMA checkpoint_threshold='100GB';")  # very importante
-
-    def _macros(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("""
-            CREATE OR REPLACE MACRO network_from_cidr(cidr_range) AS (
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[1] as bigint) * (256 * 256 * 256) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[2] as bigint) * (256 * 256      ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[3] as bigint) * (256            ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[4] as bigint)
-            );
-        """)
-
-        conn.execute("""
-            CREATE OR REPLACE MACRO broadcast_from_cidr(cidr_range) AS (
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[1] as bigint) * (256 * 256 * 256) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[2] as bigint) * (256 * 256      ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[3] as bigint) * (256            ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[4] as bigint)) + 
-                cast(pow(256, (32 - cast(string_split(cidr_range, '/')[2] as bigint)) / 8) - 1 as bigint
-            );
-        """)
-
-        conn.execute("""
-            CREATE OR REPLACE MACRO ip_within_cidr(ip, cidr_range) AS (
-                network_from_cidr(ip || '/32') >= network_from_cidr(cidr_range) AND network_from_cidr(ip || '/32') <= broadcast_from_cidr(cidr_range)
-            );       
-        """)
-
-def new_connector(db: str, readonly: bool = False, name: str = "-") -> Connector:
-    return Connector(db, read_only=readonly, name=name)
-
-
 class Repository:
     _collection: duckdb.DuckDBPyRelation
 
     def __init__(
         self, 
         connector: Connector,
-        monitor: 'Monitor',
     ) -> None:
         self.connector = connector
+
+    def load(self, monitor: HealthMonitor) -> 'Repository':
         self.monitor = monitor
-        self.monitor.initialize(self)
+        monitor.initialize()
+        return self
 
     def _query(self, table: str, **kwargs) -> pd.DataFrame:
         q = f"SELECT * FROM '{table}'"
@@ -255,70 +174,28 @@ class Repository:
 
         return summary
 
-    # ---
-    def _peek(
-        self, src_gen: Generator[pd.DataFrame, None, None]
-    ) -> pd.DataFrame | None:
-        try:
-            return next(src_gen)
-        except StopIteration:
-            return
-
-    def _fmt(
-        self, df: pd.DataFrame, oc: list[str] = [], ic: list[str] = []
-    ) -> pd.DataFrame:
-        
-        # convert to string dict and list cols
-        for col in oc:
-            df[col] = df[col].map(
-                lambda x: ujson.dumps(x) if isinstance(x, (dict, list)) else x
-            )
-
-        # convert to int64 numeric cols
-        for col in ic:
-            df[col] = pd.to_numeric(df[col], errors="coerce", dtype_backend="pyarrow", downcast="float")
-
-        df["id"] = [uuid.uuid4().hex for _ in range(len(df))]
-
-        return df
-
-    def _get_fmt_columns(self, df: pd.DataFrame) -> tuple[list[str], list[str]]:
-        n = min(1000, len(df))
-        print(f"polling source with {n}/{len(df)}")
-        s = df.sample(n)
-
-        # object cols
-        oc = []
-        for col in df.select_dtypes(include=["object"]).columns:
-            if s[col].apply(lambda x: isinstance(x, (dict, list))).any():
-                oc.append(col)
-
-        # numeric cols
-        ic = list(df.select_dtypes(include=["number"]).columns)
-        return oc, ic
-
-    def add_sources(self, *sources: Source):
+    def add_sources(self, 
+        sources: list[Source], 
+        resume: bool = True
+    ):
         for src in sources:
-            self.add_source(src)
+            self.add_source(src, resume)
 
-    def add_source(self, src: Source):
-        print(f"adding source: {src.name}")
+    def add_source(self, src: Source, resume: bool = True):
+        logger.info(f"adding {src.name} records ({src.batch_size}/b)")
 
-        c_gen = src.load()
-        peek = self._peek(c_gen)
-        if peek is None:
-            print(f"empty source: {src.name}")
-            return
+        # Try to insert the source
+        self.create(src)
 
+        # watch over the source, we want to track the cursor in case of failure
+        # to resume ading the source
+        guard = self.watch(src, resume)
         con = self.get_connection()
-
-        oc, ic = self._get_fmt_columns(peek)
-        tab = f"records_{src.name}_{src.id}"
 
         insert_conf={
             "con": con, 
-            "table": tab, 
-            "policy":OnConflict.FORCE
+            "table": guard.table, 
+            "policy": OnConflict.FORCE
         }
 
         store_conf={
@@ -327,14 +204,13 @@ class Repository:
         }
 
         with store(store_conf, insert_conf) as s:
-            print(f"inserting {src.name} records into {tab} ({src._batch_size}/b)")
-            for c in tqdm(chain([peek], c_gen)):
-                d = self._fmt(c, oc, ic)
-                s.save(d)
+            gen = guard.consume()
+            for c in tqdm(gen, desc=src.name):
+                s.save(c)
                 del c
 
         summary = {
-            "table": tab,
+            "table": guard.tab,
             "iconf": insert_conf,
             "sconf": store_conf,
         }
@@ -358,20 +234,13 @@ class Repository:
 
         cb(with_items(*items))
 
-    def add_hosts(self, hosts: pd.DataFrame) -> None:
-        cb = inserter(self.get_connection(), table="hosts")
-        cb(hosts)
+    def watch(self, src: Source, resume: bool) -> Watcher:
+        # TODO: support non-local records?
+        table = make_table_name(src.name, src.digest)
+        cursor = make_cursor(self, table, resume)
+        watcher = new_watcher(table, src, cursor)
 
-    def with_view(self, name: str, q: str) -> "Repository":
-        c = copy.copy(self)
-        con = c.get_connection()
-        con.sql(f"CREATE OR REPLACE VIEW {name} AS {q}")
-        c._collection = con.sql(f"SELECT * FROM {name}")
-        return c
-
-    def collect(self) -> pd.DataFrame:
-        return self._collection.df()
-
+    # TODO: I need to know when I am using each of the below ones.
     def query(self, q: str, bsize=DEFAULT_BSIZE) -> Generator[Any, None, None]:
         cursor = self.get_connection().execute(q)
         cols = [c[0] for c in cursor.description]  # type: ignore
@@ -402,67 +271,6 @@ class Repository:
             res[0] if (res := con.execute(dq).fetchone()) else 0
         )  # <---- this destroys previous queries, so we need a new connection for it
         return d, self.query_batch(q, normalize, bsize)
-    
-
-class Monitor:
-    repo: Repository
-
-    def __init__(self,
-        on_init: list[HealthCheck],
-        on_synchronize: list[HealthCheck],
-    ) -> None:
-        self._on_init=on_init
-        self._on_synchronize=on_synchronize
-
-    def initialize(self, repo: Repository): 
-        self.repo = repo
-        self.load(new_event(EventType.LOAD))
-
-    def load(self, e: Event):
-        print("running initialization checks")
-        for check in self._on_init:
-            check(self.repo, e)
-
-    def synchronize(self, e: Event):
-        print("running synchronization checks")
-        for check in self._on_synchronize:
-            check(self.repo, e)
-
-    def sanity_check(self):
-        print("checking repo health")
-        e = new_event(EventType.SANITY)
-        self.synchronize(e)
-
-# TODO: the event has the info about the tables to rebuild, may be wise to rebuild only those
-def rebuild_views(repo: Repository, _) -> None:
-    print("rebuilding views...")
-
-    tables = (
-        repo.get_connection()
-        .execute("""
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_name LIKE 'records_%'
-            AND table_type = 'BASE TABLE'
-        ORDER BY table_name
-    """)
-        .fetchall()
-    )
-
-    grouped = defaultdict(list)
-    for (tname,) in tables:
-        prefix = "_".join(tname.split("_")[:-1])
-        grouped[prefix].append(tname)
-
-    for prefix, tnames in grouped.items():
-        union_sql = " UNION ALL ".join([f'SELECT * FROM "{t}"' for t in tnames])
-        try:
-            repo.get_connection().execute(
-                f'CREATE OR REPLACE VIEW "{prefix}" AS {union_sql}'
-            )
-        except Exception as e:
-            print(f"failed to rebuild records view: {prefix}")
-            raise e
         
 def get_records_views(repo: Repository) -> list[tuple[str]]:
     return (
@@ -492,7 +300,7 @@ def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) 
     if not col:
        col = find_host_col(repo, db)
        if not col:
-           print(f"fialed to find a host column in {db}")
+           logger.info(f"fialed to find a host column in {db}")
            return
        
     # Check if hosts table exists
@@ -512,7 +320,7 @@ def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) 
 
     t, gen = repo.queryb(q)
     if t == 0:
-        print(f"no missing hosts from {db}")
+        logger.info(f"no missing hosts from {db}")
         return
     
     with tqdm(total=t, desc="Hosts") as pbar:
@@ -521,24 +329,58 @@ def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) 
             hosts = [new_host(ip=r.ip) for r in b.itertuples()]
             repo.create(*hosts)
             pbar.update(len(b))
+
+def add_missing_hosts(repo: Repository) -> HealthCheck:
+    def hc(e: Event):
+        if "table" not in e.summary:
+            logger.info("adding hosts from all views...")
+            tabs = get_records_views(repo)
+            for (tab,) in tabs:
+                add_hosts_from_source(repo, tab)
+            return
         
-def add_missing_hosts(repo: Repository, e: Event):
-    print("adding missing hosts...")
+        logger.info("adding missing hosts...")
+        table = e.summary["table"]
+        add_hosts_from_source(repo, table)
+    return hc
 
-    if "table" not in e.summary:
-        print("adding hosts from all views...")
-        tabs = get_records_views(repo)
-        for (tab,) in tabs:
-            add_hosts_from_source(repo, tab)
-        return
-    
-    table = e.summary["table"]
-    add_hosts_from_source(repo, table)
+# TODO: the event has the info about the tables to rebuild, may be wise to rebuild only those
+def rebuild_views(repo: Repository) -> HealthCheck:
+    def hc(_) -> None:
+        logger.info("rebuilding views...")
 
-def create_tables(models: list[Model]) -> HealthCheck:
-    print(f"creating required tables: {','.join([m.table() for m in models])}")
+        tables = (
+            repo.get_connection()
+            .execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name LIKE 'records_%'
+                AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """)
+            .fetchall()
+        )
+
+        grouped = defaultdict(list)
+        for (tname,) in tables:
+            prefix = "_".join(tname.split("_")[:-1])
+            grouped[prefix].append(tname)
+
+        for prefix, tnames in grouped.items():
+            union_sql = " UNION ALL ".join([f'SELECT * FROM "{t}"' for t in tnames])
+            try:
+                repo.get_connection().execute(
+                    f'CREATE OR REPLACE VIEW "{prefix}" AS {union_sql}'
+                )
+            except Exception as e:
+                logger.info(f"failed to rebuild records view: {prefix}")
+                raise e
+    return hc
+
+def create_tables(repo: Repository, models: list[Model]) -> HealthCheck:
+    logger.info(f"creating required tables: {','.join([m.table() for m in models])}")
     # create a fake module
-    def hc(repo: Repository, _):
+    def hc(_):
         con = repo.get_connection()
         for model in models:
             table = model.table()
@@ -551,27 +393,34 @@ def create_tables(models: list[Model]) -> HealthCheck:
             ins(model.mock())
     return hc
 
-def new_repository(connector: Connector, monitor: Monitor) -> Repository:
+def resume_cursors(repo: Repository) -> HealthCheck:
+    def hc(_):
+        raise NotImplementedError
+    return hc
+
+def new_repository(connector: Connector) -> Repository:
     return Repository(
         connector=connector,
-        monitor=monitor,
     )
 
 def load_repository(
-    sources: list[Source] = [], 
     db: str | None = None, 
     read_only: bool = False,
     save: str | None = None,
 ) -> Repository:
     connector = Connector(db, read_only=read_only)
-    monitor = Monitor(
-        on_init=[create_tables(M_REQUIRED)],
-        on_synchronize=[
-            rebuild_views,
-            add_missing_hosts,
+    repo = new_repository(connector)
+
+    init_hc = [
+            create_tables(repo, M_REQUIRED),
+            resume_cursors(repo), # something happen before, resume pending cursors
         ]
-    )
-    repo = new_repository(connector, monitor)
+    
+    sync_hc = [
+        rebuild_views(repo),
+        add_missing_hosts(repo)
+    ]
+
+    monitor = new_health_monitor(init_hc, sync_hc)
     repo.set_sources_path(save)
-    repo.add_sources(*sources)
-    return repo
+    return repo.load(monitor)

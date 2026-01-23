@@ -299,6 +299,7 @@ def parse_query(hlist: list[str], query: str):
     return q
 
 # TODO: remove the IP field, we dont need it
+# host replaces IP, you can add multiple "host" fields or one of the modifiers
 def get_grammar():
     return r"""
         %import common.CNAME
