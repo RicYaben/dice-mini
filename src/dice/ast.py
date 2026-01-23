@@ -148,6 +148,7 @@ FIELD_MAP = {
     "tag": "name",
     "label": "name",
     "service": "protocol",
+    "protocol": "protocol",
     "host": "ip",
     "port": "port",
 }
