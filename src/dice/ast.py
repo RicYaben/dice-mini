@@ -160,7 +160,7 @@ class SQLBuilder:
     def build(self, hlist: list[str], ast):
         "Returns a query for hosts"
 
-        sql = ["SELECT DISTINCT(hosts.ip) FROM records_hosts AS hosts"]
+        sql = ["SELECT DISTINCT(hosts.ip) FROM hosts AS hosts"]
         where = []
 
         # ---------- IP ----------

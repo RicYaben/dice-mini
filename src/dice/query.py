@@ -189,7 +189,7 @@ def query_prefix_hosts(**clauses) -> str:
     SELECT
         h.prefix,
         COUNT(DISTINCT h.ip) AS count
-    FROM records_hosts AS h
+    FROM hosts AS h
     {clauses}
     GROUP BY h.prefix
     """,
