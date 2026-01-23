@@ -63,9 +63,9 @@ def csv_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
         
 def get_reader(ext: str):
     match ext:
-        case "jsonl":
+        case ".jsonl":
             return jsonl_reader
-        case "csv":
+        case ".csv":
             return csv_reader
         case _:
             raise Exception(f"usupported file extension: {ext}")
