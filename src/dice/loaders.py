@@ -69,9 +69,9 @@ def get_reader(ext: str):
         case _:
             raise Exception(f"usupported file extension: {ext}")
         
-def file_loader(source_id: str, source_name: str, study: str, paths: list[str], batch_size: int) -> Generator[pd.DataFrame, None, None]:
+def file_loader(source_id: str, source_name: str, study: str, path: str, batch_size: int) -> Generator[pd.DataFrame, None, None]:
     norm = get_loader_normalizer(source_name)
-    for p in walk(paths):
+    for p in walk(path):
         reader = get_reader(p.suffixes[0])
         for c in reader(p, batch_size):
             c["path"] = str(p)

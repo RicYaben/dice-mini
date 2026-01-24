@@ -5,8 +5,6 @@ from tqdm import tqdm
 import pandas as pd
 import duckdb
 import ujson
-import copy
-import uuid
 
 from dice.connector import Connector
 from dice.health import HealthCheck, HealthMonitor, new_health_monitor
@@ -74,8 +72,6 @@ def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
     return normalize_data(df, DATA_PREFIX)
 
 
-<<<<<<< HEAD
-=======
 class Connector:
     def __init__(
         self,
@@ -174,7 +170,6 @@ def new_connector(db: str, readonly: bool = False, name: str = "-") -> Connector
     return Connector(db, read_only=readonly, name=name)
 
 
->>>>>>> master
 class Repository:
     _collection: duckdb.DuckDBPyRelation
 

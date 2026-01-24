@@ -7,14 +7,7 @@ from typing import Any, Generator, Iterable
 from dice.models import Source, Label, Model, Fingerprint, FingerprintLabel, Tag, HostTag, Host
 from dice.loaders import Loader, file_loader
 
-def new_source(name: str, fpath: str | list[str], study: str, loader: Loader = file_loader, batch_size: int = 10_000) -> Source:
-    p: list[str] = []
-    match fpath:
-        case str():
-            p=[fpath]
-        case list():
-            p=fpath
-
+def new_source(name: str, fpath: str, study: str, loader: Loader = file_loader, batch_size: int = 10_000) -> Source:
     return Source(
         name=name,
         path=fpath,
