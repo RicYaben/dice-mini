@@ -1,4 +1,6 @@
 from typing import Optional
+import pandas as pd
+from sqlalchemy import text
 from typing_extensions import Annotated
 
 from dice.repo import load_repository
@@ -42,16 +44,19 @@ def query(
     if exclude:
         flist = list(set(flist) - set(exclude.split(",")))
 
-    con = repo.connect()
-    info_b = new_info(flist)
-    for b in batches:
-        ips = b.ip.tolist()
-        iq = info_b.make(ips)
-        df = con.execute(iq).df()
-        df['services'] = df['services'].apply(
-            lambda services: [
-                {**s, 'data': ujson.loads(s['data'])} for s in services
-            ]
-        )
-        print(df.to_json(orient="records", lines=True, force_ascii=False))
+    with repo.connect() as con:
+        info_b = new_info(flist)
+        for b in batches:
+            ips = b.ip.tolist()
+            iq = info_b.make(ips)
+
+            # TODO: this has changed dramatically
+            rows = con.execute(text(iq)).mappings().fetchall()
+            df = pd.DataFrame.from_records(rows) # type: ignore
+            df['services'] = df['services'].apply(
+                lambda services: [
+                    {**s, 'data': ujson.loads(s['data'])} for s in services
+                ]
+            )
+            print(df.to_json(orient="records", lines=True, force_ascii=False))
 

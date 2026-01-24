@@ -1,4 +1,4 @@
-from typing import Optional, Generator, Any, Callable
+from typing import Optional, Generator, Any, Callable, Type
 from dataclasses import dataclass, field
 from tabulate import tabulate
 from tqdm import tqdm
@@ -21,11 +21,11 @@ from dice.config import (
     TAGGER,
     MType,
 )
+from dice.database import insert_or_ignore
 from dice.query import query_db, query_records
 from dice.repo import Repository
 from dice.models import Fingerprint, FingerprintLabel, HostTag, Label, Tag
 from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
-from dice.store import OnConflict
 
 logger = logging.getLogger(__name__)
 
@@ -52,22 +52,19 @@ class Module:
     _tags: dict[str, Tag] = field(default_factory=dict)
 
     # cache, temporarely stores items
+    _model: Optional[Type] = None
     _cache: list = field(default_factory=list)
     _temp_size: int = DEFAULT_BSIZE
-    _policy: OnConflict = OnConflict.FORCE
 
     def init(self, repo: Repository) -> None:
         self._repo = repo
         return self._init(self)
-    
-    def set_store_policy(self, policy: OnConflict):
-        self._policy = policy
 
     def flush(self) -> None:
         "flushes remaining items in the cache"
-        repo = self.repo()
-        repo.insert(*self._cache, policy=self._policy)
-        self._cache = []
+        if not self._cache:
+            return
+        self.repo().insert(self._cache)
 
     def handle(self) -> None:
         logger.info(f"[{self.name}]")
@@ -88,17 +85,17 @@ class Module:
     ):
         lab = new_label(self.name, name, short, description, mitigation)
         self._labels[name] = lab
-        self.repo().insert(lab)
+        self.repo().insert([lab])
 
     def register_tag(self, name: str, description: str = "-") -> None:
         tag = new_tag(self.name, name, description)
         self._tags[name] = tag
-        self.repo().insert(tag)
+        self.repo().insert([tag])
     # ----
 
     def make_label(self, fp: str, lab: str) -> FingerprintLabel:
         slab = self._labels[lab]
-        return new_fp_label(fp, str(slab.id))
+        return new_fp_label(fp, slab.id.hex)
 
     def make_fingerprint(
         self, rec: Any, data: dict, protocol: str = "-"
@@ -122,7 +119,7 @@ class Module:
         port: int = -1,
     ) -> HostTag:
         t = self._tags[tag]
-        return new_host_tag(host, str(t.id), details, protocol, port)
+        return new_host_tag(host, t.id.hex, details, protocol, port)
 
     def make_fp_tag(self, fp, tag: str, details: str = "") -> HostTag:
         return self.make_tag(fp["host"], tag, details, fp["protocol"], fp["port"])
@@ -538,8 +535,13 @@ def make_cls_handler(
             labs = []
             for _, fp in df.iterrows():
                 if lab := cls_cb(fp):
-                    labs.append(mod.make_label(str(fp["id"]), lab))
-            repo.insert(*labs)
+                    labs.append(mod.make_label(fp["id"].hex, lab))
+
+            if not labs:
+                return
+
+            with repo.session() as ses:
+                insert_or_ignore(ses, FingerprintLabel, labs)
 
         q = query_db("fingerprints", protocol=protocol)
         mod.with_pbar(handler, q)

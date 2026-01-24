@@ -1,12 +1,13 @@
 import typer
 from typing_extensions import Annotated
 from dice.repo import new_repository
-from dice.connector import new_connector
+from dice.database import new_connector
 from dice.analysis.comparing import compare
 
 compare_app = typer.Typer(help="Compare two datasets")
 
 # NOTE: In principle this is NOT a function. It is supposed to be a module
+# TODO: I do not have this one here, check previous versions for attachs
 @compare_app.command(name="compare")
 def diff(
     q: str,

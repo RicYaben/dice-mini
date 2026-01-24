@@ -1,10 +1,8 @@
 import uuid
 import pandas as pd
 
-from typing import Generator, Optional
+from typing import Optional
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
-
-from dice.loaders import file_loader
 
 
 class Model(SQLModel):
@@ -22,32 +20,25 @@ class Model(SQLModel):
         return [cls.from_series(row) for _, row in df.iterrows()]
 
 
-class Source(Model, table=True): 
+class Source(Model, table=True):
     "A source represents the content of a set of resources (datasets)"
+
     # name of the source, e.g., zgrab2
     name: str = Field(unique=True)
-    resources: list['Resource'] = Relationship(back_populates="shard")
+    resources: list["Resource"] = Relationship()
 
-    
+
 class Resource(Model, table=True):
     fpath: str = Field(unique=True)
     source_id: str = Field(default=None, foreign_key="source.id")
-    source: Source = Relationship(back_populates="source")
-    cursor: 'Cursor' = Relationship(back_populates="cursor")
 
-    def load(self, bsize: int) -> Generator[pd.DataFrame, None, None]:
-        return file_loader(self.source_id, self.fpath, bsize)
-    
+    cursor: "Cursor" = Relationship()
+
 
 class Cursor(Model, table=True):
-    shard_id: Optional[str] = Field(default=None, foreign_key="shard.id", unique=True)
+    resource_id: Optional[str] = Field(default=None, foreign_key="resource.id", unique=True)
     index: int = 0
-
-    def reset(self):
-        self.index = 0
-
-    def update(self, idx: int = 1):
-        self.index += idx
+    done: bool = False
 
 
 class Host(Model, table=True):
@@ -56,16 +47,14 @@ class Host(Model, table=True):
     domain: Optional[str] = None
     prefix: Optional[str] = None
     asn: Optional[str] = None
-
-    tags: list["Tag"] = Relationship(back_populates="tag")
-    fingerprints: list["Fingerprint"] = Relationship(back_populates="fingerprint")
-
+    
 
 class Fingerprint(Model, table=True):
-    # ID of the record related to
-    record_id: Optional[str] = Field(default=None, foreign_key="record.id")
     # Host (ip)
     host_id: Optional[str] = Field(default=None, foreign_key="host.id")
+    # ID of the record related to
+    record_id: Optional[str]
+    source_id: Optional[str] = Field(default=None, foreign_key="source.id")
 
     # data, is a dict
     data: str

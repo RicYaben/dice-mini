@@ -1,13 +1,7 @@
 from sqlite3 import IntegrityError
 from typing import Iterable, Literal, Optional, Type
-from sqlalchemy import Connection
-from sqlmodel import Session, UniqueConstraint, exists, select, insert, values, create_engine
-
-# TODO
-# This should be the right way
-# e = input("duckdb")
-# engine = create_engine(f"{e}:///test.db")
-# SQLModel.metadata.create_all(engine)
+from sqlalchemy import Connection, Engine
+from sqlmodel import SQLModel, Session, UniqueConstraint, exists, select, insert, values, create_engine
 
 def insert_records(session: Session, model: Type, records: Iterable[dict]):
     """
@@ -101,16 +95,19 @@ class Connector:
     ) -> None:
         self.location = location if location else ":memory:"
         self.name = name
+        self.engine: Optional[Engine] = None
 
     def load(self):
-        e = create_engine(f"{self.name}://{self.location}")
+        e = create_engine(f"{self.name}:///{self.location}")
+        SQLModel.metadata.create_all(e)
+        
         self.engine = e
         return e
 
     def connection(self) -> Connection:
         if not self.engine:
             self.load()
-        return self.engine.connect()
+        return self.engine.connect() # type: ignore
     
     def session(self) -> Session:
         return Session(self.connection())

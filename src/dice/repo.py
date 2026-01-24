@@ -1,15 +1,13 @@
+from tqdm import tqdm
 from typing import Any, Generator, Callable, Optional
 from sqlmodel import Session, text
-from tqdm import tqdm
-from sqlalchemy import Connection
+from sqlalchemy import Connection, inspect
 
 from dice.health import HealthCheck, HealthMonitor, new_health_monitor
-from dice.models import Cursor, Source
 from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
 from dice.events import Event
-from dice.records import Sourcerer, new_sourcerer
-from dice.database import Connector, get_or_create, insert_records
+from dice.database import Connector, insert_or_ignore, new_connector
 
 import pandas as pd
 import ujson
@@ -24,6 +22,7 @@ type RecordsWrapper = Callable[[Any], pd.DataFrame]
 
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
+
 
 def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     # cannot parse
@@ -70,14 +69,13 @@ def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
 
 
 class Repository:
-
     def __init__(
-        self, 
-        database: Connector,
+        self,
+        con: Connector,
     ) -> None:
-        self.database = database
+        self.con = con
 
-    def load(self, monitor: HealthMonitor) -> 'Repository':
+    def load(self, monitor: HealthMonitor) -> "Repository":
         self.monitor = monitor
         monitor.initialize()
         return self
@@ -102,50 +100,24 @@ class Repository:
         with self.connect() as conn:
             result = pd.read_sql(q, conn, params=params)
             return result
-            
+
     def connect(self) -> Connection:
-        return self.database.connection()
-    
+        return self.con.connection()
+
     def session(self) -> Session:
-        return self.database.session()
-    
-    def set_sources_path(self, path: str | None) -> 'Repository':
-        self._sources_path = path
-        return self
+        return self.con.session()
 
-    def add_sources(self, 
-        sources: list[Source], 
-        resume: bool = True
-    ):
-        for src in sources:
-            self.add_source(src, resume)
+    def insert(self, items: list[Any], policy=insert_or_ignore):
+        if not items:
+            return
 
-    def add_source(self, src: Source, resume: bool = True):
-        logger.info(f"adding {src.name} records ({src.batch_size}/b)")
-
-        with self.session() as ses:
-            # Try to insert the source
-            ses.add(src)
-            ses.commit()
-            ses.refresh(src)
-
-            sourcerer = self.make_sourcerer(src, resume)
-            model = sourcerer.build_model()
-
-            gen = sourcerer.cast()
-            for c in tqdm(gen, desc=src.name):
-                insert_records(ses, model, c.to_records())
-                ses.commit()
-
-    def make_sourcerer(self, src: Source, resume: bool) -> Sourcerer:
-        table = f"{src.name}_records"
-
+        model = type(items[0])
         with self.session() as s:
-            cursor, _ = get_or_create(s, Cursor, source_id=str(src.id))
-        so = new_sourcerer(table, src, cursor)
-        return so
+            policy(s, model, items)
 
-    def simple_query(self, q: str, bsize: int= DEFAULT_BSIZE) -> Generator[dict, None, None]:
+    def simple_query(
+        self, q: str, bsize: int = DEFAULT_BSIZE
+    ) -> Generator[dict, None, None]:
         """Execute a query in batches. Returns a dict
 
         Args:
@@ -167,7 +139,7 @@ class Repository:
                 break
 
     def query_batch(
-        self, q: str, normalize: bool = True, bsize: int =DEFAULT_BSIZE
+        self, q: str, normalize: bool = True, bsize: int = DEFAULT_BSIZE
     ) -> Generator[pd.DataFrame, None, None]:
         """Execute a query in batches. Returns a pandas dataframe
 
@@ -180,12 +152,11 @@ class Repository:
             Generator[pd.DataFrame, None, None]: Dataset (chunked)
         """
         with self.connect() as ses:
-            res = ses.execute(text(q))
+            res = ses.execute(text(q)).mappings()
             norm = normalize_records if normalize else lambda x: x
 
-            while rows:= res.fetchmany(bsize):
-                # TODO: update this
-                yield norm(pd.DataFrame.from_records(rows))
+            while rows := res.fetchmany(bsize):
+                yield norm(pd.DataFrame.from_records(rows)) # type: ignore
 
     def query_count(self, q: str) -> int:
         """Count number of items in the query
@@ -204,7 +175,7 @@ class Repository:
             return d
 
     def query(
-        self, q: str, normalize: bool = True, bsize: int=DEFAULT_BSIZE
+        self, q: str, normalize: bool = True, bsize: int = DEFAULT_BSIZE
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
         """A wrapper for the query to return the number of results in the query and the batches
 
@@ -219,46 +190,45 @@ class Repository:
         d = self.query_count(q)
         gen = self.query_batch(q, normalize, bsize)
         return (d, gen)
-        
+
 
 def find_host_col(repo: Repository, table: str) -> str | None:
     guesswork = {"ip", "saddr", "host", "addr"}
     q = f"SELECT * FROM '{table}' LIMIT 0"
-    
+
     with repo.connect() as con:
         res = con.execute(text(q))
-        cols = {desc[0].lower() for desc in res.cursor.description}
+        cols = {desc[0].lower() for desc in res.cursor.description}  # type: ignore
 
         common = guesswork & cols
         return next(iter(common), None)
 
 
-def add_hosts_from_records_table(repo: Repository, db: str, col: Optional[str] = "ip") -> None:
-    if not db.startswith("records_"):
-        db = f"records_{db}"
-
+def add_hosts_from_records_table(
+    repo: Repository, table: str, col: Optional[str] = "ip"
+) -> None:
     if not col:
-       col = find_host_col(repo, db)
+        col = find_host_col(repo, table)
     if not col:
-        logger.info(f"fialed to find a host column in {db}")
+        logger.debug(f"fialed to find a host column in {table}")
         return
-       
+
     # Check if hosts table exists
     q = f"""
-    SELECT DISTINCT s.{col} AS ip
-    FROM "{db}" AS s
+    SELECT DISTINCT t.{col} AS ip
+    FROM "{table}" AS t
     """
 
-    t, gen = repo.query(q)
-    if t == 0:
-        logger.info(f"no missing hosts from {db}")
+    n, gen = repo.query(q)
+    if n == 0:
+        logger.debug(f"no missing hosts from {table}")
         return
-    
-    with tqdm(total=t, desc="Hosts") as pbar:
+
+    with tqdm(total=n, desc="Hosts") as pbar:
         pbar.write("inserting missing hosts")
         for b in gen:
             hosts = [new_host(ip=str(r.ip)) for r in b.itertuples()]
-            repo.insert(*hosts)
+            repo.insert(hosts)
             pbar.update(len(b))
 
 def add_missing_hosts(repo: Repository) -> HealthCheck:
@@ -266,36 +236,45 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
         if "table" not in e.summary:
             logger.debug("adding hosts from all views...")
             # TODO: no more views, do something like "get_records_tables" or just "get_tables"
-            tabs = get_records_views(repo)
+            with repo.session() as s:
+                insp = inspect(s.get_bind())
+                tabs = [
+                    name
+                    for name in insp.get_table_names()
+                    if name.endswith("_records")
+                ]
+
             for (tab,) in tabs:
                 add_hosts_from_records_table(repo, tab)
             return
-        
+
         logger.debug("adding missing hosts...")
         table = e.summary["table"]
         add_hosts_from_records_table(repo, table)
     return hc
 
+
+# TODO: implement this
 def resume_cursors(repo: Repository) -> HealthCheck:
     def hc(_):
         raise NotImplementedError
     return hc
 
+
 def new_repository(connector: Connector) -> Repository:
     return Repository(
-        database=connector,
+        con=connector,
     )
 
+
 def load_repository(
-    db: str | None = None, 
-    save: str | None = None,
+    db: str | None = None,
 ) -> Repository:
-    connector = Connector(db)
+    connector = new_connector(db)
     repo = new_repository(connector)
 
-    init_hc = [resume_cursors(repo)]
+    init_hc = []#resume_cursors(repo)]
     sync_hc = [add_missing_hosts(repo)]
 
     monitor = new_health_monitor(init_hc, sync_hc)
-    repo.set_sources_path(save)
     return repo.load(monitor)

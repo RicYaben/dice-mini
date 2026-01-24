@@ -5,14 +5,11 @@ from dataclasses import dataclass
 from typing import Any, Generator, Iterable, Optional
 
 from dice.models import Source, Label, Model, Fingerprint, FingerprintLabel, Tag, HostTag, Host
-from dice.loaders import Loader, file_loader
+from dice.loaders import Loader
 
-def new_source(name: str, fpath: str, loader: Loader = file_loader, batch_size: int = 10_000) -> Source:
+def new_source(name: str) -> Source:
     return Source(
         name=name,
-        path=fpath,
-        batch_size=batch_size,
-        _handler=loader
     ) 
 
 def new_label(module_name: str, name: str, short:  Optional[str]= None, description:  Optional[str]= None, mitigaton:  Optional[str]= None) -> Label:

@@ -12,7 +12,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pandas",
-    "duckdb",
     "numpy",
     "plotly",
     "squarify",
@@ -24,6 +23,7 @@ dependencies = [
     "ujson",
     "pyarrow",
     "typer",
+    "sqlmodel"
 ]
 
 [tool.setuptools]
