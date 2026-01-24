@@ -2,10 +2,6 @@ from collections import defaultdict
 from typing import Any, Generator, Callable, Optional
 from tqdm import tqdm
 
-import pandas as pd
-import duckdb
-import ujson
-
 from dice.connector import Connector
 from dice.health import HealthCheck, HealthMonitor, new_health_monitor
 from dice.models import Model, Source, M_REQUIRED
@@ -13,11 +9,13 @@ from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
 from dice.store import OnConflict, inserter, store, table_exists
 from dice.events import Event, new_event, EventType
+from dice.watcher import Watcher, new_watcher
 
+import pandas as pd
+import duckdb
+import ujson
 import warnings
 import logging
-
-from dice.watcher import Watcher, new_watcher
 
 warnings.simplefilter(action="ignore", category=UserWarning)
 
@@ -70,104 +68,6 @@ def normalize_records(df: pd.DataFrame) -> pd.DataFrame:
 
 def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
     return normalize_data(df, DATA_PREFIX)
-
-
-class Connector:
-    def __init__(
-        self,
-        db_path: str | None,
-        name: str = "-",
-        read_only: bool = False,
-        config: dict = {},
-    ) -> None:
-        self.name = name
-        self.db_path: str = db_path if db_path else ":memory:"
-        self.readonly = read_only
-        self.config = config
-
-        self.con: duckdb.DuckDBPyConnection | None = None
-
-    def init_con(self, con, readonly: bool):
-        self._extensions(con)
-        self._pragmas(con)
-        if not readonly:
-            self._macros(con)
-
-    def get_connection(self) -> duckdb.DuckDBPyConnection:
-        if not self.con:
-            self.con = self.new_connection()
-        return self.con
-
-    def new_connection(self) -> duckdb.DuckDBPyConnection:
-        con = duckdb.connect(
-            self.db_path, read_only=self.readonly
-        )  # config=self.config)
-
-        self.init_con(con, self.readonly)
-        return con
-
-    def with_connection(self, name: str) -> "Connector":
-        return Connector(self.db_path, name, self.readonly, self.config)
-    
-    def attach(self, path: str, name: str) -> None:
-        con = self.get_connection()
-        con.execute(f"ATTACH '{path}' AS {name};")
-
-    def copy(self, table: str, src: str) -> None:
-        con = self.get_connection()
-        con.execute(f"DROP TABLE IF EXISTS 'main.{table}'")
-        con.execute(f"CREATE TABLE 'main.{table}' AS SELECT * FROM '{src}.{table}'")
-
-    def _extensions(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("INSTALL inet")
-        conn.execute("LOAD inet")
-
-    def _pragmas(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("PRAGMA temp_directory='./duckdb_tmp';")
-        conn.execute("PRAGMA threads=8;")
-        conn.execute("PRAGMA memory_limit='10GB';")
-        conn.execute("PRAGMA max_memory='10GB';")
-        conn.execute("PRAGMA preserve_insertion_order=FALSE;")
-        conn.execute("PRAGMA checkpoint_threshold='100GB';")  # very importante
-
-    def _macros(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("""
-            CREATE OR REPLACE MACRO network_from_cidr(cidr_range) AS (
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[1] as bigint) * (256 * 256 * 256) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[2] as bigint) * (256 * 256      ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[3] as bigint) * (256            ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[4] as bigint)
-            );
-        """)
-
-        conn.execute("""
-            CREATE OR REPLACE MACRO broadcast_from_cidr(cidr_range) AS (
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[1] as bigint) * (256 * 256 * 256) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[2] as bigint) * (256 * 256      ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[3] as bigint) * (256            ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[4] as bigint)) + 
-                cast(pow(256, (32 - cast(string_split(cidr_range, '/')[2] as bigint)) / 8) - 1 as bigint
-            );
-        """)
-
-        conn.execute("""
-            CREATE OR REPLACE MACRO ip_within_cidr(ip, cidr_range) AS (
-                network_from_cidr(ip || '/32') >= network_from_cidr(cidr_range) AND network_from_cidr(ip || '/32') <= broadcast_from_cidr(cidr_range)
-            );       
-        """)
-
-        conn.execute("""
-            CREATE OR REPLACE FUNCTION inet_aton(ip) AS (
-                cast(
-                split_part(ip, '.', 1)::UINTEGER * 16777216 +
-                split_part(ip, '.', 2)::UTINYINT * 65536 +
-                split_part(ip, '.', 3)::UTINYINT * 256 +
-                split_part(ip, '.', 4)::UTINYINT as UINTEGER)
-            );
-        """)
-
-def new_connector(db: str, readonly: bool = False, name: str = "-") -> Connector:
-    return Connector(db, read_only=readonly, name=name)
 
 
 class Repository:
@@ -240,36 +140,6 @@ class Repository:
             return normalize_records(df)
         return df
 
-    def get_tags(self, *host: str, **kwargs) -> pd.DataFrame:
-        if len(host):
-            kwargs["host"] = list(host)
-        df = self._query("host_tags", **kwargs)
-        return df
-
-    def summary(self) -> dict:
-        "returns a brief summary of the database contents"
-        con = self.get_connection()
-        fpd = con.execute("""
-            SELECT COUNT(DISTINCT host)
-            FROM fingerprints       
-        """).fetchone()
-
-        lbld = con.execute("""
-            SELECT COUNT(DISTINCT fp.host)
-            FROM fingerprints fp
-            JOIN fingerprint_labels fl ON fl.fingerprint_id = fp.id
-        """).fetchone()
-
-        summary = {}
-
-        if fpd is not None:
-            summary["fingerprinted"] = fpd[0]
-
-        if lbld is not None:
-            summary["labelled"] = lbld[0]
-
-        return summary
-
     def add_sources(self, 
         sources: list[Source], 
         resume: bool = True
@@ -306,7 +176,7 @@ class Repository:
                 del c
 
         summary = {
-            "table": guard.tab,
+            "table": guard.table,
             "iconf": insert_conf,
             "sconf": store_conf,
         }
@@ -336,8 +206,16 @@ class Repository:
         cursor = make_cursor(self, table, resume)
         watcher = new_watcher(table, src, cursor)
 
-    # TODO: I need to know when I am using each of the below ones.
-    def query(self, q: str, bsize=DEFAULT_BSIZE) -> Generator[Any, None, None]:
+    def simple_query(self, q: str, bsize: int= DEFAULT_BSIZE) -> Generator[dict, None, None]:
+        """Execute a query in batches. Returns a dict
+
+        Args:
+            q (str): query
+            bsize (int, optional): Batch size. Defaults to DEFAULT_BSIZE.
+
+        Yields:
+            Generator[dict, None, None]: Dataset (chunked)
+        """
         cursor = self.get_connection().execute(q)
         cols = [c[0] for c in cursor.description]  # type: ignore
 
@@ -349,8 +227,18 @@ class Repository:
             break
 
     def query_batch(
-        self, q, normalize: bool = True, bsize=DEFAULT_BSIZE
+        self, q: str, normalize: bool = True, bsize: int =DEFAULT_BSIZE
     ) -> Generator[pd.DataFrame, None, None]:
+        """Execute a query in batches. Returns a pandas dataframe
+
+        Args:
+            q (str): query
+            normalize (bool, optional): Wether to normalize records. Defaults to True.
+            bsize (int, optional): Batch size. Defaults to DEFAULT_BSIZE.
+
+        Yields:
+            Generator[pd.DataFrame, None, None]: Dataset (chunked)
+        """
         con = self.connector.new_connection()
         cursor = con.execute(q)
         norm = normalize_records if normalize else lambda x: x
@@ -358,15 +246,38 @@ class Repository:
         for b in cursor.fetch_record_batch(bsize):
             yield norm(b.to_pandas())
 
-    def queryb(
-        self, q, normalize: bool = True, bsize=DEFAULT_BSIZE
-    ) -> tuple[int, Generator[Any, None, None]]:
+    def query_count(self, q: str) -> int:
+        """Count number of items in the query
+
+        Args:
+            q (str): query
+
+        Returns:
+            int: number of results
+        """
         dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
         con = self.connector.new_connection()
         d = (
             res[0] if (res := con.execute(dq).fetchone()) else 0
         )  # <---- this destroys previous queries, so we need a new connection for it
-        return d, self.query_batch(q, normalize, bsize)
+        return d
+
+    def query(
+        self, q: str, normalize: bool = True, bsize: int=DEFAULT_BSIZE
+    ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
+        """A wrapper for the query to return the number of results in the query and the batches
+
+        Args:
+            q (str): query
+            normalize (bool, optional): Wether to normalize records. Defaults to True.
+            bsize (int, optional): size of the batch. Defaults to DEFAULT_BSIZE.
+
+        Returns:
+            tuple[int, Generator[pd.DataFrame, None, None]]: number of results, and dataset
+        """
+        d = self.query_count(q)
+        gen = self.query_batch(q, normalize, bsize)
+        return (d, gen)
         
 def get_records_views(repo: Repository) -> list[tuple[str]]:
     return (
@@ -389,7 +300,7 @@ def find_host_col(repo: Repository, table: str) -> str | None:
     return next(iter(common), None)
 
 
-def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) -> None:
+def add_hosts_from_records_table(repo: Repository, db: str, col: Optional[str] = None) -> None:
     if not db.startswith("records_"):
         db = f"'records_{db}'"
 
@@ -414,7 +325,7 @@ def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) 
         FROM {db} AS s
         """
 
-    t, gen = repo.queryb(q)
+    t, gen = repo.query(q)
     if t == 0:
         logger.info(f"no missing hosts from {db}")
         return
@@ -422,7 +333,7 @@ def add_hosts_from_source(repo: Repository, db: str, col: Optional[str] = None) 
     with tqdm(total=t, desc="Hosts") as pbar:
         pbar.write("inserting missing hosts")
         for b in gen:
-            hosts = [new_host(ip=r.ip) for r in b.itertuples()]
+            hosts = [new_host(ip=str(r.ip)) for r in b.itertuples()]
             repo.create(*hosts)
             pbar.update(len(b))
 
@@ -432,12 +343,12 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
             logger.info("adding hosts from all views...")
             tabs = get_records_views(repo)
             for (tab,) in tabs:
-                add_hosts_from_source(repo, tab)
+                add_hosts_from_records_table(repo, tab)
             return
         
         logger.info("adding missing hosts...")
         table = e.summary["table"]
-        add_hosts_from_source(repo, table)
+        add_hosts_from_records_table(repo, table)
     return hc
 
 # TODO: the event has the info about the tables to rebuild, may be wise to rebuild only those

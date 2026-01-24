@@ -1,11 +1,11 @@
 from typing import Optional
 from typing_extensions import Annotated
-import ujson
 
 from dice.repo import load_repository
 from dice.ast import make_parser
 from dice.info import new_info
 
+import ujson
 import typer
 
 query_app = typer.Typer(help="Query the database")
@@ -35,7 +35,7 @@ def query(
     qt = parser.to_sql(hlist, q)
 
     repo = load_repository(db=database)
-    n, batches = repo.queryb(qt)
+    n, batches = repo.query(qt)
     print(f"found {n} hosts")
 
     flist = fields.split(",")

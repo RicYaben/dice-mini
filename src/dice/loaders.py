@@ -1,7 +1,7 @@
 import pandas as pd
 import glob
 
-from typing import Generator, Iterable
+from typing import Generator
 from collections.abc import Callable
 from pathlib import Path
 
@@ -80,18 +80,3 @@ def file_loader(source_id: str, source_name: str, study: str, path: str, batch_s
             c["study"] = study
             c = norm(c)
             yield c
-
-
-def with_records(records: Iterable[dict], chunk_size: int = 5_000) -> Loader:
-    def load(*args, **kwargs) -> Generator[pd.DataFrame, None, None]:
-        batch = []
-        for rec in records:
-            batch.append(rec)
-            if len(batch) >= chunk_size:
-                yield pd.DataFrame(batch)
-                batch.clear()
-
-        # Yield remaining records
-        if batch:
-            yield pd.DataFrame(batch)
-    return load

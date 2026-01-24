@@ -1,4 +1,5 @@
 import typer
+
 from dice.config import DEFAULT_MODULES_DIR
 from dice.module import load_registry_plugins, new_component_manager, load_registry
 from dice.modules import registry as core

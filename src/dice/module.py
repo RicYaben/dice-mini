@@ -1,15 +1,16 @@
+from typing import Optional, Generator, Any, Callable
+from dataclasses import dataclass, field
+from tabulate import tabulate
+from tqdm import tqdm
 from importlib import import_module
 from importlib.metadata import entry_points
+
 import pathlib
 import json
 import fnmatch
 import sys
 import pandas as pd
-
-from typing import Optional, Generator, Any, Callable
-from dataclasses import dataclass, field
-from tabulate import tabulate
-from tqdm import tqdm
+import logging
 
 from dice.config import (
     CLASSIFIER,
@@ -26,10 +27,11 @@ from dice.models import Fingerprint, FingerprintLabel, HostTag, Label, Tag
 from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
 from dice.store import OnConflict
 
+logger = logging.getLogger(__name__)
+
 type ModuleInit = Callable[["Module"], None]
 type ModuleHandler = Callable[["Module"], None]
 type RecordHandler = Callable[[Any], Generator[Any, None, None]]
-
 
 @dataclass
 class Module:
@@ -68,7 +70,7 @@ class Module:
         self._cache = []
 
     def handle(self) -> None:
-        print(f"[{self.name}]")
+        logger.info(f"[{self.name}]")
         self._handler(self)
         self.flush()
 
@@ -78,7 +80,7 @@ class Module:
         return self._repo
 
     def query(self, q: str) -> Generator[Any, None, None]:
-        return self.repo().query(q)
+        return self.repo().simple_query(q)
 
     # ---- 
     def register_label(
@@ -138,7 +140,7 @@ class Module:
         if not desc:
             desc = self.name
             
-        t, gen = self.repo().queryb(q, bsize=bsize)
+        t, gen = self.repo().query(q, bsize=bsize)
         with tqdm(total=t, desc=desc) as pbar:
             pbar.write(f"fetching in batches ({bsize}/b)")
             for b in gen:
@@ -186,7 +188,7 @@ class Module:
                 case _:
                     raise ValueError(f"unknown orientation: {orient}")
 
-        t, gen = self.repo().queryb(q)
+        t, gen = self.repo().query(q)
         it = iter_orient(orient)
         if not pbar:
             for b in gen:
@@ -260,14 +262,14 @@ class Engine:
         def fcomp(t):
             return lambda c: c.c_type == t
 
-        print("initializing")
+        logger.info("initializing")
         for c in self.components:
             c.init(repo)
 
-        print("shaking vigorously")
+        logger.info("shaking vigorously")
         for m in [SCANNER, FINGERPRINTER, CLASSIFIER, TAGGER]:
             if comps := list(filter(fcomp(m), self.components)):
-                print(f"rolling {m.name}(s)")
+                logger.info(f"rolling {m.name}(s)")
                 for c in comps:
                     c.handle()
 
@@ -289,7 +291,7 @@ class Engine:
                     )
 
         if not rows:
-            print("No components found.")
+            logger.info("No components found.")
             return
 
         # sort rows by Component, Type, Signature, Module
@@ -318,10 +320,10 @@ class Engine:
         # merge repeated cells visually
         rows = collapse_repeated(rows)
 
-        print(
+        logger.info(
             "\033[1mEngine information table.\033[0m  Includes loaded modules by components and signatures."
         )
-        print(
+        logger.info(
             tabulate(
                 rows,
                 headers=["Component", "Type", "Signature", "Collection", "Module"],
@@ -474,7 +476,7 @@ class ComponentManager:
         found = self.find(modules=modules)
 
         if not found:
-            print("No modules found.")
+            logger.info("No modules found.")
             return
 
         rows = [[path, str(m.m_type).capitalize(), m.name] for path, m in found]
@@ -492,12 +494,12 @@ class ComponentManager:
             else:
                 last_type = row[1]
 
-        print(
+        logger.info(
             "\033[1mRegistry information table.\033[0m  Includes matching available modules."
         )
         if modules != ["*"]:
-            print(f"Queries: {', '.join(modules)}")
-        print(
+            logger.info(f"Queries: {', '.join(modules)}")
+        logger.info(
             tabulate(
                 rows,
                 headers=["Collection", "Type", "Module"],

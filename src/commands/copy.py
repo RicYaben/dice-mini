@@ -1,5 +1,6 @@
 import typer
-from dice.repo import new_connector  
+
+from dice.connector import new_connector  
 
 copy_app = typer.Typer(help="Copy tables from one db to another")
 
@@ -13,13 +14,6 @@ def copy(
         "--tables",
         help="Tables to copy. Comma separated",
     ),
-    # TODO: records should copy the tables from a view and replicate it in the
-    # other db.
-    # records: bool = typer.Option(
-    #     False,
-    #     "--records",
-    #     help="copy from records views"
-    # )
 ):
     if not tables:
         raise ValueError("copy needs one or more tables")

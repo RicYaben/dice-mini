@@ -169,7 +169,7 @@ def compare(repo: Repository, query: str, dst: str, fields: list[str], output: s
     parser = make_parser()
     q = parser.to_sql(query)
 
-    t, batches = repo.queryb(q)
+    t, batches = repo.query_batch_n(q)
 
     con = repo.get_connection()
     info_b = new_info(fields)

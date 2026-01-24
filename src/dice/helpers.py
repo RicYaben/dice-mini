@@ -84,6 +84,20 @@ def record_to_dict(r, prefix: str="data_") -> dict:
     d = {k[len(prefix):]: v for k, v in d.items() if k.startswith(prefix)}
     return d
 
+def with_records(records: Iterable[dict], chunk_size: int = 5_000) -> Loader:
+    def load(*args, **kwargs) -> Generator[pd.DataFrame, None, None]:
+        batch = []
+        for rec in records:
+            batch.append(rec)
+            if len(batch) >= chunk_size:
+                yield pd.DataFrame(batch)
+                batch.clear()
+
+        # Yield remaining records
+        if batch:
+            yield pd.DataFrame(batch)
+    return load
+
 def with_model(models: Iterable[Model], chunk_size: int= 5_000) -> Loader:
     def load(*args, **kwargs) -> Generator[pd.DataFrame, None, None]:
         batch = []
