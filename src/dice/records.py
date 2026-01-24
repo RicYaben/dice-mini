@@ -5,46 +5,15 @@ from dice.loaders import walk
 from dice.models import Source, Cursor
 
 import uuid
-import duckdb
 import ujson
 import pandas as pd
 import logging
 
 logger = logging.getLogger(__name__)
 
-def counter_get_or_create(
-    con: duckdb.DuckDBPyConnection,
-    name: str,
-    start: int = 0
-) -> int:
-    con.execute("""
-        INSERT INTO counters (name, value)
-        VALUES (?, ?)
-        ON CONFLICT (name) DO NOTHING
-    """, (name, start))
 
-    return con.execute("""
-        SELECT value FROM counters WHERE name = ?
-    """, (name,)).fetchone()[0] # type: ignore
-
-def counter_update(
-    con: duckdb.DuckDBPyConnection,
-    name: str,
-    step: int = 1
-) -> int:
-    result = con.execute("""
-        UPDATE counters
-        SET value = value + ?
-        WHERE name = ?
-        RETURNING value
-    """, (step, name)).fetchone()
-
-    if result is None:
-        raise KeyError(f"Counter '{name}' does not exist")
-
-    return result[0]
-
-class Watcher:
+class Sourcerer:
+    """Something to load sources"""
     _gen: Optional[Generator[pd.DataFrame, None, None]]
     _peek: Optional[pd.DataFrame]
     _peeked: bool = False
@@ -142,7 +111,7 @@ class Watcher:
         df["id"] = [uuid.uuid4().hex for _ in range(len(df))]
         return df
 
-    def consume(self) -> Generator[pd.DataFrame, None, None]:
+    def cast(self) -> Generator[pd.DataFrame, None, None]:
         data = self.load()
 
         p = self.peek
@@ -171,5 +140,5 @@ class Watcher:
             raise ValueError(f"empty source: {self.src.name}")
 
 
-def new_watcher(table: str, src: Source, cursor: Cursor) -> Watcher:
-    return Watcher(table, src, cursor)
+def new_sourcerer(table: str, src: Source, cursor: Cursor) -> Sourcerer:
+    return Sourcerer(table, src, cursor)

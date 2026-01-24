@@ -42,7 +42,7 @@ def query(
     if exclude:
         flist = list(set(flist) - set(exclude.split(",")))
 
-    con = repo.get_connection()
+    con = repo.connect()
     info_b = new_info(flist)
     for b in batches:
         ips = b.ip.tolist()

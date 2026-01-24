@@ -1,183 +1,122 @@
-import hashlib
 import uuid
-import re
 import pandas as pd
 
-from abc import ABC
 from typing import Generator, Optional
+from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
-from dice.config import DEFAULT_BSIZE
-from dice.loaders import Loader, file_loader
-from dataclasses import KW_ONLY, dataclass, asdict, field
+from dice.loaders import file_loader
 
-@dataclass
-class Model(ABC):
-    _: KW_ONLY
-    _pk: tuple[str, ...] = ("id", )
-    # synthetic primary key ALWAYS present
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
-    def __post_init__(self):
-        # if the model wants deterministic composite identity,
-        # override generate_pk() to compute it from its fields.
-        self.id = self.generate_pk()
-
-    def generate_pk(self) -> str:
-        if self._pk == ("id",):
-            return self.id  # keep UUID
-        return self.compute_composite_hash()
-
-    def compute_composite_hash(self) -> str:
-        fields = self._pk
-        h = hashlib.sha256()
-        for f in fields:
-            h.update(str(getattr(self, f)).encode())
-        return h.hexdigest()
+class Model(SQLModel):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
 
     def to_dict(self) -> dict:
-        return asdict(self)
-    
-    @classmethod
-    def table(cls) -> str:
-        # Split CamelCase into words
-        parts = re.findall(r'[A-Z][a-z0-9]*', cls.__name__)
-        name = "_".join(p.lower() for p in parts)
+        return self.model_dump()
 
-        # Ensure it ends with 's'
-        if not name.endswith("s"):
-            name += "s"
-
-        return name
-    
     @classmethod
-    def from_series(cls, row: pd.Series) -> "Model":
+    def from_series(cls, row: pd.Series):
         return cls(**row.to_dict())
-    
+
     @classmethod
-    def from_dataframe(cls, df: pd.DataFrame) -> list["Model"]:
+    def from_dataframe(cls, df: pd.DataFrame):
         return [cls.from_series(row) for _, row in df.iterrows()]
-    
-    @classmethod
-    def mock(cls) -> pd.DataFrame:
-        return pd.DataFrame([cls().to_dict()])
 
-@dataclass
-class Source(Model):
-    _pk = ("name",)
 
+class Source(Model, table=True): 
+    "A source represents the content of a set of resources (datasets)"
     # name of the source, e.g., zgrab2
-    name: str = "-"
-    # id of the study
-    study: str = "-"
-    # path to the source: a glob
-    # Example: "dir/*/*.jsonl"
-    path: str = "-"
+    name: str = Field(unique=True)
+    resources: list['Resource'] = Relationship(back_populates="shard")
 
-    # size of the batches for loading and saving
-    batch_size: int = DEFAULT_BSIZE
-
-    # an explicit loader to use for this source
-    _handler: Loader = file_loader
-
-    def load(self) -> Generator[pd.DataFrame, None, None]:
-        return self._handler(self.id, self.name, self.study, self.path, self.batch_size)
     
-@dataclass
-class Counter(Model):
-    _pk = ("name",)
+class Resource(Model, table=True):
+    fpath: str = Field(unique=True)
+    source_id: str = Field(default=None, foreign_key="source.id")
+    source: Source = Relationship(back_populates="source")
+    cursor: 'Cursor' = Relationship(back_populates="cursor")
 
-    name: str = "-"
-    value: int = 0
+    def load(self, bsize: int) -> Generator[pd.DataFrame, None, None]:
+        return file_loader(self.source_id, self.fpath, bsize)
+    
 
-@dataclass
-class Cursor(Model):
-    _pk = ("source",)
-    source: str = "-"
+class Cursor(Model, table=True):
+    shard_id: Optional[str] = Field(default=None, foreign_key="shard.id", unique=True)
     index: int = 0
-    
+
     def reset(self):
-        self.index=0
-    
-    def update(self, idx: int=1):
-        self.index+=idx
-    
-@dataclass
-class Host(Model):
-    _pk = ("ip",)
-    # address of the host
-    ip: str = "-"
-    domain: str = "-"
-    # prefix
-    prefix: str = "-"
-    asn: str = "-"
-    
-@dataclass
-class Fingerprint(Model):
-    _pk = ("record_id", "module_name")
-    # Host (ip)
-    host: str = "-"
+        self.index = 0
+
+    def update(self, idx: int = 1):
+        self.index += idx
+
+
+class Host(Model, table=True):
+    ip: str = Field(unique=True)
+
+    domain: Optional[str] = None
+    prefix: Optional[str] = None
+    asn: Optional[str] = None
+
+    tags: list["Tag"] = Relationship(back_populates="tag")
+    fingerprints: list["Fingerprint"] = Relationship(back_populates="fingerprint")
+
+
+class Fingerprint(Model, table=True):
     # ID of the record related to
-    record_id: str = "-"
-    # name of the module that created the fingerprint
-    module_name: str = "-"
+    record_id: Optional[str] = Field(default=None, foreign_key="record.id")
+    # Host (ip)
+    host_id: Optional[str] = Field(default=None, foreign_key="host.id")
+
     # data, is a dict
-    data: str = "{}"
+    data: str
+    # name of the module that created the fingerprint
+    module_name: str
 
     # port and protocol from the record
-    port: int = 0
-    protocol: str = "-"
-    
-@dataclass
-class Label(Model):
-    _pk = ("name", "module_name")
+    port: Optional[int] = None
+    protocol: Optional[str] = None
+
+    __table_args__ = (UniqueConstraint("record_id", "host_id", "module_name"),)
+
+
+class Label(Model, table=True):
     # name of the label
-    name: str = "-"
-    # short descriptor
-    short: str = "-"
-    # descriptor
-    description: str = "-"
-    # mitigation strategy
-    mitigation: str = "-"
+    name: str = Field(unique=True)
     # name of the module that created this label
-    module_name: str = "-"
+    module_name: str
+    # descriptor
+    description: Optional[str] = None
+    # short descriptor
+    short: Optional[str] = None
+    # mitigation strategy
+    mitigation: Optional[str] = None
 
-@dataclass
-class FingerprintLabel(Model):
-    _pk = ("fingerprint_id", "label_id")
+
+class FingerprintLabel(Model, table=True):
     # ID of the fingerprint
-    fingerprint_id: str = "-"
+    fingerprint_id: Optional[str] = Field(default=None, foreign_key="fingerprint.id")
     # ID of the label
-    label_id: str = "-"
+    label_id: Optional[str] = Field(default=None, foreign_key="label.id")
 
-@dataclass
-class Tag(Model):
-    _pk = ("name", "module_name")
-    name: str = "-"
-    description: str = "-"
-    module_name: str = "-"
+    __table_args__ = (UniqueConstraint("fingerprint_id", "label_id"),)
 
-@dataclass
-class HostTag(Model):
-    _pk = ("host", "tag_id")
+
+class Tag(Model, table=True):
+    name: str = Field(unique=True)
+    module_name: str
+    description: str
+
+
+class HostTag(Model, table=True):
     # Host (ip)
-    host: str = "-"
+    host_id: Optional[str] = Field(default=None, foreign_key="host.id")
     # ID of hte Tag
-    tag_id: str = "-"
+    tag_id: Optional[str] = Field(default=None, foreign_key="tag.id")
     # further details
-    details: str = "-"
+    details: Optional[str] = None
 
     # Protocol and Port (optional)
     protocol: Optional[str] = None
     port: Optional[int] = None
 
-M_REQUIRED = [
-    Host, 
-    Tag, 
-    HostTag, 
-    Fingerprint, 
-    Label, 
-    FingerprintLabel, 
-    Counter,
-    Cursor,
-    Source,
-]
+    __table_args__ = (UniqueConstraint("host_id", "tag_id"),)

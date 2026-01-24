@@ -66,7 +66,7 @@ class Module:
     def flush(self) -> None:
         "flushes remaining items in the cache"
         repo = self.repo()
-        repo.create(*self._cache, policy=self._policy)
+        repo.insert(*self._cache, policy=self._policy)
         self._cache = []
 
     def handle(self) -> None:
@@ -88,17 +88,17 @@ class Module:
     ):
         lab = new_label(self.name, name, short, description, mitigation)
         self._labels[name] = lab
-        self.repo().create(lab)
+        self.repo().insert(lab)
 
     def register_tag(self, name: str, description: str = "-") -> None:
         tag = new_tag(self.name, name, description)
         self._tags[name] = tag
-        self.repo().create(tag)
+        self.repo().insert(tag)
     # ----
 
     def make_label(self, fp: str, lab: str) -> FingerprintLabel:
         slab = self._labels[lab]
-        return new_fp_label(fp, slab.id)
+        return new_fp_label(fp, str(slab.id))
 
     def make_fingerprint(
         self, rec: Any, data: dict, protocol: str = "-"
@@ -122,7 +122,7 @@ class Module:
         port: int = -1,
     ) -> HostTag:
         t = self._tags[tag]
-        return new_host_tag(host, t.id, details, protocol, port)
+        return new_host_tag(host, str(t.id), details, protocol, port)
 
     def make_fp_tag(self, fp, tag: str, details: str = "") -> HostTag:
         return self.make_tag(fp["host"], tag, details, fp["protocol"], fp["port"])
@@ -539,7 +539,7 @@ def make_cls_handler(
             for _, fp in df.iterrows():
                 if lab := cls_cb(fp):
                     labs.append(mod.make_label(str(fp["id"]), lab))
-            repo.create(*labs)
+            repo.insert(*labs)
 
         q = query_db("fingerprints", protocol=protocol)
         mod.with_pbar(handler, q)

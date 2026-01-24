@@ -1,89 +1,120 @@
-import duckdb
+from sqlite3 import IntegrityError
+from typing import Iterable, Literal, Optional, Type
+from sqlalchemy import Connection
+from sqlmodel import Session, UniqueConstraint, exists, select, insert, values, create_engine
+
+# TODO
+# This should be the right way
+# e = input("duckdb")
+# engine = create_engine(f"{e}:///test.db")
+# SQLModel.metadata.create_all(engine)
+
+def insert_records(session: Session, model: Type, records: Iterable[dict]):
+    """
+    Quickest way to blindly insert thousands of records into a database.
+    Mainly used by the sourcerer to insert actual records.
+    https://github.com/fastapi/sqlmodel/discussions/659
+    """
+    session.exec(insert(model), params=records) # type: ignore
+    session.commit()
+
+def _get_unique_columns(model) -> list[str]:
+    table = model.__table__
+
+    # Prefer composite unique constraints
+    for c in table.constraints:
+        if isinstance(c, UniqueConstraint):
+            return [col.name for col in c.columns]
+
+    # Fallback to column-level unique=True
+    cols = [c.name for c in table.columns if c.unique]
+    return cols
+
+
+def insert_or_ignore(
+    session: Session,
+    model: Type,
+    items: Iterable[dict],
+) -> None:
+    items = list(items)
+    if not items:
+        return
+
+    table = model.__table__
+    cols = list(items[0].keys())
+    unique_cols = _get_unique_columns(model)
+
+    # VALUES table (src_df equivalent)
+    src = values(
+        *[table.c[c] for c in cols],
+        name="src"
+    ).data(
+        [tuple(item[c] for c in cols) for item in items]
+    )
+
+    # WHERE NOT EXISTS (...)
+    not_exists = ~exists(
+        select(1).where(
+            *[
+                table.c[c] == src.c[c]
+                for c in unique_cols
+            ]
+        )
+    )
+
+    stmt = (
+        insert(table)
+        .from_select(
+            cols,
+            select(*[src.c[c] for c in cols]).where(not_exists)
+        )
+    )
+
+    session.exec(stmt)
+    session.commit()
+
+def get_or_create(session: Session, model, **kwargs):
+    # Try to get existing
+    obj = session.exec(select(model).filter_by(**kwargs)).first()
+    if obj:
+        return obj, False
+
+    # Try to insert
+    obj = model(**kwargs)
+    session.add(obj)
+    try:
+        session.commit()
+        session.refresh(obj)
+        return obj, True
+    except IntegrityError:
+        session.rollback()
+        # Another process created it first
+        obj = session.exec(select(model).filter_by(**kwargs)).one()
+        return obj, False
 
 
 class Connector:
     def __init__(
         self,
-        db_path: str | None,
-        name: str = "-",
-        read_only: bool = False,
-        config: dict = {},
+        location: Optional[str],
+        name: Literal["sqlite"] = "sqlite",
     ) -> None:
+        self.location = location if location else ":memory:"
         self.name = name
-        self.db_path: str = db_path if db_path else ":memory:"
-        self.readonly = read_only
-        self.config = config
 
-        self.con: duckdb.DuckDBPyConnection | None = None
+    def load(self):
+        e = create_engine(f"{self.name}://{self.location}")
+        self.engine = e
+        return e
 
-    def init_con(self, con, readonly: bool):
-        self._extensions(con)
-        self._pragmas(con)
-        if not readonly:
-            self._macros(con)
-
-    def get_connection(self) -> duckdb.DuckDBPyConnection:
-        if not self.con:
-            self.con = self.new_connection()
-        return self.con
-
-    def new_connection(self) -> duckdb.DuckDBPyConnection:
-        con = duckdb.connect(
-            self.db_path, read_only=self.readonly
-        )  # config=self.config)
-
-        self.init_con(con, self.readonly)
-        return con
-
-    def with_connection(self, name: str) -> "Connector":
-        return Connector(self.db_path, name, self.readonly, self.config)
+    def connection(self) -> Connection:
+        if not self.engine:
+            self.load()
+        return self.engine.connect()
     
-    def attach(self, path: str, name: str) -> None:
-        con = self.get_connection()
-        con.execute(f"ATTACH '{path}' AS {name};")
+    def session(self) -> Session:
+        return Session(self.connection())
 
-    def copy(self, table: str, src: str) -> None:
-        con = self.get_connection()
-        con.execute(f"DROP TABLE IF EXISTS 'main.{table}'")
-        con.execute(f"CREATE TABLE 'main.{table}' AS SELECT * FROM '{src}.{table}'")
 
-    def _extensions(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("INSTALL inet")
-        conn.execute("LOAD inet")
-
-    def _pragmas(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("PRAGMA temp_directory='./duckdb_tmp';")
-        conn.execute("PRAGMA threads=8;")
-        conn.execute("PRAGMA memory_limit='10GB';")
-        conn.execute("PRAGMA max_memory='10GB';")
-        conn.execute("PRAGMA preserve_insertion_order=FALSE;")
-        conn.execute("PRAGMA checkpoint_threshold='100GB';")  # very importante
-
-    def _macros(self, conn: duckdb.DuckDBPyConnection) -> None:
-        conn.execute("""
-            CREATE OR REPLACE MACRO network_from_cidr(cidr_range) AS (
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[1] as bigint) * (256 * 256 * 256) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[2] as bigint) * (256 * 256      ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[3] as bigint) * (256            ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[4] as bigint)
-            );
-        """)
-
-        conn.execute("""
-            CREATE OR REPLACE MACRO broadcast_from_cidr(cidr_range) AS (
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[1] as bigint) * (256 * 256 * 256) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[2] as bigint) * (256 * 256      ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[3] as bigint) * (256            ) +
-                cast(string_split(string_split(cidr_range, '/')[1], '.')[4] as bigint)) + 
-                cast(pow(256, (32 - cast(string_split(cidr_range, '/')[2] as bigint)) / 8) - 1 as bigint
-            );
-        """)
-
-        conn.execute("""
-            CREATE OR REPLACE MACRO ip_within_cidr(ip, cidr_range) AS (
-                network_from_cidr(ip || '/32') >= network_from_cidr(cidr_range) AND network_from_cidr(ip || '/32') <= broadcast_from_cidr(cidr_range)
-            );       
-        """)
-
-def new_connector(db: str, readonly: bool = False, name: str = "-") -> Connector:
-    return Connector(db, read_only=readonly, name=name)
+def new_connector(db: Optional[str], name: Literal["sqlite"] = "sqlite") -> Connector:
+    return Connector(db, name=name)

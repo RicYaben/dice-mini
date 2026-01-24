@@ -5,7 +5,7 @@ from typing import Generator
 from collections.abc import Callable
 from pathlib import Path
 
-type Loader = Callable[[str, str, str, str, int], Generator[pd.DataFrame, None, None]]
+type Loader = Callable[[str, str, str, int], Generator[pd.DataFrame, None, None]]
 
 def walk(p: str):
     """
@@ -69,14 +69,12 @@ def get_reader(ext: str):
         case _:
             raise Exception(f"usupported file extension: {ext}")
         
-def file_loader(source_id: str, source_name: str, study: str, path: str, batch_size: int) -> Generator[pd.DataFrame, None, None]:
+def file_loader(source_id: str, fpath: str, batch_size: int) -> Generator[pd.DataFrame, None, None]:
     norm = get_loader_normalizer(source_name)
     for p in walk(path):
         reader = get_reader(p.suffixes[0])
         for c in reader(p, batch_size):
             c["path"] = str(p)
             c["source_id"] = source_id
-            c["source_name"] = source_name
-            c["study"] = study
             c = norm(c)
             yield c

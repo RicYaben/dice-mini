@@ -171,7 +171,7 @@ def compare(repo: Repository, query: str, dst: str, fields: list[str], output: s
 
     t, batches = repo.query_batch_n(q)
 
-    con = repo.get_connection()
+    con = repo.connect()
     info_b = new_info(fields)
 
     with tqdm(total=t, desc="compare") as pbar:

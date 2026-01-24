@@ -2,21 +2,20 @@ import pandas as pd
 import ipaddress
 
 from dataclasses import dataclass
-from typing import Any, Generator, Iterable
+from typing import Any, Generator, Iterable, Optional
 
 from dice.models import Source, Label, Model, Fingerprint, FingerprintLabel, Tag, HostTag, Host
 from dice.loaders import Loader, file_loader
 
-def new_source(name: str, fpath: str, study: str, loader: Loader = file_loader, batch_size: int = 10_000) -> Source:
+def new_source(name: str, fpath: str, loader: Loader = file_loader, batch_size: int = 10_000) -> Source:
     return Source(
         name=name,
         path=fpath,
-        study=study,
         batch_size=batch_size,
         _handler=loader
     ) 
 
-def new_label(module_name: str, name: str, short: str="-", description: str ="-", mitigaton: str ="-") -> Label:
+def new_label(module_name: str, name: str, short:  Optional[str]= None, description:  Optional[str]= None, mitigaton:  Optional[str]= None) -> Label:
     return Label(
         name=name,
         short=short,
@@ -25,18 +24,18 @@ def new_label(module_name: str, name: str, short: str="-", description: str ="-"
         module_name=module_name
     )
 
-def new_fingerprint(module: str, host: str, record: str, data: str, protocol: str = "-", port: int = -1) -> Fingerprint:
+def new_fingerprint(module: str, host_id: str, record_id: str, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:
     return Fingerprint(
-        host=host,
-        record_id=record,
+        host_id=host_id,
+        record_id=record_id,
         module_name=module,
         data=data,
         port=port,
         protocol=protocol
     )
 
-def new_fp_label(fingerprint: str, label: str) -> FingerprintLabel:
-    return FingerprintLabel(fingerprint, label)
+def new_fp_label(fp_id: str, label_id: str) -> FingerprintLabel:
+    return FingerprintLabel(fingerprint_id=fp_id, label_id=label_id)
 
 def new_tag(module_name: str, name: str, description: str="-") -> Tag:
     return Tag(
@@ -45,8 +44,8 @@ def new_tag(module_name: str, name: str, description: str="-") -> Tag:
         module_name=module_name
     )
 
-def new_host_tag(host_id: str, tag_id: str, details="-", protocol: str="-", port: int= -1) -> HostTag:
-    return HostTag(host_id, tag_id, details, protocol, port)
+def new_host_tag(host_id: str, tag_id: str, details: Optional[str] = None, protocol: Optional[str]= None, port: Optional[int] = None) -> HostTag:
+    return HostTag(host_id=host_id, tag_id=tag_id, details=details, protocol=protocol, port=port)
 
 def new_host(ip: str, domain: str = "", prefix: str ="", asn: str = "") -> Host:
     ipaddress.ip_address(ip) # this panics if not an ip address
@@ -67,9 +66,6 @@ class Collection:
 
 def new_collection(*items: Model) -> Collection:
     return Collection(list(items))
-
-def make_sources(*fpaths: str, name: str="-", study="-", batch_size: int= 50_000) -> list[Source]:
-    return [new_source(name, p, study, batch_size=batch_size) for p in fpaths]
 
 def get_record_field(r, field: str, default: Any=None, prefix: str="data_") -> Any:
     v = r.get(prefix+field, default)

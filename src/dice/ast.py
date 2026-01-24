@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from typing import Optional
 from collections import OrderedDict
-
-import ipaddress
 from lark import Lark, Token, Transformer, Tree, v_args
 
+import ipaddress
 
 @dataclass
 class IPRange:
