@@ -90,9 +90,46 @@ def query_prefix_hosts(**clauses) -> str:
     SELECT
         h.prefix,
         COUNT(DISTINCT h.ip) AS count
-    FROM records_hosts AS h
+    FROM hosts AS h
     {clauses}
     GROUP BY h.prefix
     """,
         clauses,
     )
+
+def query_vuln() -> str:
+    q = """
+WITH host_labels AS (
+    SELECT
+        f.host,
+        list_distinct(list(l.name)) AS labels
+    FROM fingerprints f
+    JOIN fingerprint_labels fl
+        ON fl.fingerprint_id = f.id
+    JOIN labels l
+        ON l.id = fl.label_id
+    GROUP BY f.host
+)
+SELECT
+    h.ip,
+    hl.labels,
+    r.name,
+    r.domain,
+    r.type,
+    r.asn,
+    r.as_name,
+    r.as_domain,
+    r.as_type,
+    r.country
+FROM host_labels hl
+JOIN hosts h
+    ON h.ip = hl.host
+LEFT JOIN records_ipinfo_company r
+    ON r.start_ip NOT LIKE '%:%'
+   AND r.end_ip   NOT LIKE '%:%'
+   AND inet_aton(h.ip)
+       BETWEEN inet_aton(r.start_ip)
+           AND inet_aton(r.end_ip)
+ORDER BY inet_aton(h.ip) DESC
+"""
+    return q.strip()

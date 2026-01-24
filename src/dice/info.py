@@ -96,7 +96,7 @@ class InfoQueryBuilder:
             {tags_select}
         FROM (
             SELECT DISTINCT ip, prefix, asn
-            FROM {db_prefix}records_hosts AS hosts
+            FROM {db_prefix}hosts AS hosts
             WHERE ip IN ({host_list})
         ) AS h
         {ports_join}
