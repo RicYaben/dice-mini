@@ -24,6 +24,8 @@ dependencies = [
     "ujson",
     "pyarrow",
     "typer",
+    "dacite",
+    "cryptography"
 ]
 
 [tool.setuptools]

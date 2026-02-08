@@ -153,6 +153,16 @@ class Connector:
             );       
         """)
 
+        conn.execute("""
+            CREATE OR REPLACE FUNCTION inet_aton(ip) AS (
+                cast(
+                split_part(ip, '.', 1)::UINTEGER * 16777216 +
+                split_part(ip, '.', 2)::UTINYINT * 65536 +
+                split_part(ip, '.', 3)::UTINYINT * 256 +
+                split_part(ip, '.', 4)::UTINYINT as UINTEGER)
+            );
+        """)
+
 def new_connector(db: str, readonly: bool = False, name: str = "-") -> Connector:
     return Connector(db, read_only=readonly, name=name)
 

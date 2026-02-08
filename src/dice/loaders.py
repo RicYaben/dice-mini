@@ -50,19 +50,38 @@ def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]
             return zgrab2_loader_normalizer
         case _:
             return lambda x: x
-
-def jsonl_loader(source_id: str, source_name: str, study: str, paths: list[str], batch_size: int):
-    norm = get_loader_normalizer(source_name)
-
-    for p in walk(paths):
+        
+def jsonl_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
         # NOTE: engine pyarrow does not support chunking
-        for chunk in pd.read_json(p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size):
-            chunk["path"] = str(p)
-            chunk["source_id"] = source_id
-            chunk["source_name"] = source_name
-            chunk["study"] = study
-            chunk = norm(chunk)
-            yield chunk
+        for c in pd.read_json(p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size):
+            yield c
+            
+
+def csv_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
+    for c in pd.read_csv(p, chunksize=batch_size):
+        yield c
+        
+def get_reader(ext: str):
+    match ext:
+        case ".jsonl":
+            return jsonl_reader
+        case ".csv":
+            return csv_reader
+        case _:
+            raise Exception(f"usupported file extension: {ext}")
+        
+def file_loader(source_id: str, source_name: str, study: str, paths: list[str], batch_size: int) -> Generator[pd.DataFrame, None, None]:
+    norm = get_loader_normalizer(source_name)
+    for p in walk(paths):
+        reader = get_reader(p.suffixes[0])
+        for c in reader(p, batch_size):
+            c["path"] = str(p)
+            c["source_id"] = source_id
+            c["source_name"] = source_name
+            c["study"] = study
+            c = norm(c)
+            yield c
+
 
 def with_records(records: Iterable[dict], chunk_size: int = 5_000) -> Loader:
     def load(*args, **kwargs) -> Generator[pd.DataFrame, None, None]:

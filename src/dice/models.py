@@ -152,6 +152,8 @@ class Label(Model):
     mitigation: str
     # name of the module that created this label
     module_name: str
+    #
+    level: int
 
     @classmethod
     def primary_key(cls):
@@ -169,6 +171,7 @@ class Label(Model):
             description="__mock__",
             mitigation="__mock__",
             module_name="__mock__",
+            level=0,
         )
 
 @dataclass
@@ -177,6 +180,8 @@ class FingerprintLabel(Model):
     fingerprint_id: str
     # ID of the label
     label_id: str
+    # a comment
+    comment: str
 
     @classmethod
     def primary_key(cls):
@@ -191,6 +196,7 @@ class FingerprintLabel(Model):
         return mock_df(
             fingerprint_id="__mock__",
             label_id="__mock__",
+            comment="__mock__"
         )
 
 @dataclass

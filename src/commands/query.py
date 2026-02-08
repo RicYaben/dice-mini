@@ -1,5 +1,6 @@
 from typing import Optional
 from typing_extensions import Annotated
+import ujson
 
 from dice.repo import load_repository
 from dice.ast import make_parser
@@ -47,5 +48,10 @@ def query(
         ips = b.ip.tolist()
         iq = info_b.make(ips)
         df = con.execute(iq).df()
+        df['services'] = df['services'].apply(
+            lambda services: [
+                {**s, 'data': ujson.loads(s['data'])} for s in services
+            ]
+        )
         print(df.to_json(orient="records", lines=True, force_ascii=False))
 

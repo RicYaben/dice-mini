@@ -148,6 +148,7 @@ FIELD_MAP = {
     "tag": "name",
     "label": "name",
     "service": "protocol",
+    "protocol": "protocol",
     "host": "ip",
     "port": "port",
 }
@@ -160,7 +161,7 @@ class SQLBuilder:
     def build(self, hlist: list[str], ast):
         "Returns a query for hosts"
 
-        sql = ["SELECT DISTINCT(hosts.ip) FROM records_hosts AS hosts"]
+        sql = ["SELECT DISTINCT(hosts.ip) FROM hosts AS hosts"]
         where = []
 
         # ---------- IP ----------

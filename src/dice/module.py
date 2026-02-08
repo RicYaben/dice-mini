@@ -21,6 +21,7 @@ from dice.config import (
     MType,
 )
 from dice.query import query_db, query_records
+from dice.records import eval_communication, eval_encryption, eval_status
 from dice.repo import Repository
 from dice.models import Fingerprint, FingerprintLabel, HostTag, Source, Label, Tag
 from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
@@ -82,9 +83,9 @@ class Module:
 
     # ---- 
     def register_label(
-        self, name: str, short: str = "-", description: str = "-", mitigation: str = "-"
+        self, name: str, short: str = "-", description: str = "-", mitigation: str = "-", level=0,
     ):
-        lab = new_label(self.name, name, short, description, mitigation)
+        lab = new_label(self.name, name, short, description, mitigation, level)
         self._labels[name] = lab
         self.repo().create(lab)
 
@@ -94,9 +95,9 @@ class Module:
         self.repo().create(tag)
     # ----
 
-    def make_label(self, fp: str, lab: str) -> FingerprintLabel:
+    def make_label(self, fp: str, lab: str, comment: str = "") -> FingerprintLabel:
         slab = self._labels[lab]
-        return new_fp_label(fp, slab.id)
+        return new_fp_label(fp, slab.id, comment)
 
     def make_fingerprint(
         self, rec: Any, data: dict, protocol: str = "-"
@@ -523,19 +524,59 @@ def new_component_manager(study: str) -> ComponentManager:
     return ComponentManager(study)
 
 
+
+FPCallback = Callable[[pd.Series], dict | None]
+RowHandler = Callable[[pd.Series], None]
+
+def default_handler(
+    mod: Module,
+    fp_cb: FPCallback,
+    protocol: str,
+) -> RowHandler:
+    def handler(r: pd.Series):
+        if fp := fp_cb(r):
+            mod.store(mod.make_fingerprint(r, fp, protocol))
+    return handler
+
+def zgrab2_handler(
+    mod: Module,
+    fp_cb: FPCallback,
+    protocol: str,
+) -> RowHandler:
+    def handler(r: pd.Series):
+        is_proto = eval_communication(r), # true or false
+
+        # return early, is a false-positive
+        if not is_proto:
+            return
+
+        base = {
+            "is_protocol": is_proto,
+            "connection": eval_status(r), # connected, refused
+            "encryption": eval_encryption(r), # TLS, DTLS, or whatever other scheme; otherwise None
+            "certificates": r.get("data_certificates", None)
+        }
+
+        if fp := fp_cb(r):
+            base.update(fp)
+
+        mod.store(mod.make_fingerprint(r, base, protocol))
+    return handler
+
 def make_fp_handler(
-    fp_cb: Callable[[pd.Series], dict | None],
+    fp_cb: FPCallback,
     protocol: str = "-",
     source: str = "zgrab2",
 ) -> ModuleHandler:
     def wrapper(mod: Module) -> None:
-        def handler(r):
-            if fp := fp_cb(r):
-                mod.store(mod.make_fingerprint(r, fp, protocol))
+        match source:
+            case "zgrab2":
+                h = zgrab2_handler(mod, fp_cb, protocol)
+            case _:
+                h = default_handler(mod, fp_cb, protocol)
 
         q = query_records(source=source, protocol=protocol)
-        mod.itemize(q, handler, orient="rows")
-
+        mod.itemize(q, h, orient="rows")
     return wrapper
 
 

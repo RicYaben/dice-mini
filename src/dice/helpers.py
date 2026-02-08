@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Any, Generator, Iterable
 
 from dice.models import Source, Label, Model, Fingerprint, FingerprintLabel, Tag, HostTag, Host
-from dice.loaders import Loader, jsonl_loader
+from dice.loaders import Loader, file_loader
 
-def new_source(name: str, fpath: str | list[str], study: str, loader: Loader = jsonl_loader, batch_size: int = 10_000) -> Source:
+def new_source(name: str, fpath: str | list[str], study: str, loader: Loader = file_loader, batch_size: int = 10_000) -> Source:
     p: list[str] = []
     match fpath:
         case str():
@@ -23,13 +23,14 @@ def new_source(name: str, fpath: str | list[str], study: str, loader: Loader = j
         _handler=loader
     ) 
 
-def new_label(module_name: str, name: str, short: str="-", description: str ="-", mitigaton: str ="-") -> Label:
+def new_label(module_name: str, name: str, short: str="-", description: str ="-", mitigaton: str ="-", level: int=0) -> Label:
     return Label(
         name=name,
         short=short,
         description=description,
         mitigation=mitigaton,
-        module_name=module_name
+        module_name=module_name,
+        level=level,
     )
 
 def new_fingerprint(module: str, host: str, record: str, data: str, protocol: str = "-", port: int = -1) -> Fingerprint:
@@ -42,8 +43,8 @@ def new_fingerprint(module: str, host: str, record: str, data: str, protocol: st
         protocol=protocol
     )
 
-def new_fp_label(fingerprint: str, label: str) -> FingerprintLabel:
-    return FingerprintLabel(fingerprint, label)
+def new_fp_label(fingerprint: str, label: str, comment: str = "") -> FingerprintLabel:
+    return FingerprintLabel(fingerprint, label, comment)
 
 def new_tag(module_name: str, name: str, description: str="-") -> Tag:
     return Tag(
