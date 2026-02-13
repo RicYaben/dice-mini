@@ -50,6 +50,17 @@ class Cursor(Model, table=True):
     resource_id: Optional[str] = Field(default=None, foreign_key="resource.id", unique=True)
     index: int = 0
 
+    def update(self, con: Connection, i: int=1):
+        self.index += i
+        with Session(con) as s:
+            s.add(self)
+            s.commit()
+
+    def done(self, con: Connection):
+        self.index=-1
+        with Session(con) as s:
+            s.add(self)
+            s.commit()
 
 class Host(Model, table=True):
     ip: str = Field(unique=True)

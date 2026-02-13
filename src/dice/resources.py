@@ -1,7 +1,7 @@
 from itertools import chain
 from typing import Generator, Optional
 from sqlalchemy import Connection
-from sqlmodel import Session
+
 from tqdm import tqdm
 
 from dice.config import DEFAULT_BSIZE
@@ -28,11 +28,10 @@ class Sourcerer:
     _oc: list[str] = []
     _ic: list[str] = []
 
-    def __init__(self, rsrc: Resource, cursor: Cursor, resume: bool, bsize: int) -> None:
+    def __init__(self, rsrc: Resource, resume: bool, bsize: int) -> None:
         self.resume = resume
         self.bsize = bsize
         self.rsrc = rsrc
-        self.cursor = cursor
     
     @property
     def peek(self) -> pd.DataFrame | None:
@@ -88,7 +87,7 @@ class Sourcerer:
             return self._gen
         
         data = read_resource(self.rsrc.id.hex, self.rsrc.fpath, self.bsize)
-        for _ in range(self.cursor.index):
+        for _ in range(self.rsrc.cursor.index):
             next(data, None)
 
         self._gen = data
@@ -114,9 +113,10 @@ class Sourcerer:
         return df
 
     def cast(self, con: Connection) -> Generator[pd.DataFrame, None, None]:
-        if not self.resume or self.cursor.index < 0:
+        cursor = self.rsrc.cursor
+        if not self.resume or cursor.index < 0:
             # we change the cursor to the beggining
-            self.cursor.index = 0
+            cursor.index = 0
             # delete all the records stored from this resource to avoid dupes
             self.rsrc.flush_records(con)
 
@@ -128,18 +128,9 @@ class Sourcerer:
         for c in chain([p], data):
             fmt = self.format_columns(c, oc, ic)
             yield fmt
+            cursor.update(con)
 
-            self.cursor.index += 1
-
-            with Session(con) as s:
-                s.add(self.rsrc)
-                s.commit()
-
-        with Session(con) as s:
-            self.cursor.index = -1
-            s.add(self.rsrc)
-            s.commit()
-
+        cursor.done(con)
         # reset the peek and generator
         self.reset()
 
@@ -154,8 +145,8 @@ class Sourcerer:
             raise ValueError(f"empty resource: {self.rsrc.fpath}")
 
 
-def new_sourcerer(resource: Resource, cursor: Cursor, resume: bool, bsize: int) -> Sourcerer:
-    return Sourcerer(resource, cursor, resume, bsize)
+def new_resourcerer(resource: Resource, resume: bool, bsize: int) -> Sourcerer:
+    return Sourcerer(resource, resume, bsize)
 
 
 def add_resource(repo: Repository, name: str, source: str, fpath: str, resume: bool = True, bsize: int = DEFAULT_BSIZE):
@@ -169,7 +160,7 @@ def add_resource(repo: Repository, name: str, source: str, fpath: str, resume: b
             s.commit()
             s.refresh(res)
 
-            sourcerer = new_sourcerer(res, cursor, resume, bsize)
+            sourcerer = new_resourcerer(res, resume, bsize)
             sourcerer.load()
 
         with repo.connect() as con:

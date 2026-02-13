@@ -1,6 +1,6 @@
 from tqdm import tqdm
 from typing import Any, Generator, Callable, Optional
-from sqlmodel import Session, text
+from sqlmodel import Session, exists, select, text
 from sqlalchemy import Connection, inspect
 
 from dice.health import HealthCheck, HealthMonitor, new_health_monitor
@@ -8,6 +8,8 @@ from dice.helpers import new_collection, new_host
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
 from dice.events import Event
 from dice.database import Connector, insert_or_ignore, new_connector
+from dice.models import Resource, Host, get_records_table
+from dice.resources import new_resourcerer
 
 import pandas as pd
 import ujson
@@ -80,6 +82,7 @@ class Repository:
         monitor.initialize()
         return self
 
+    # TODO: is this necessary anymore?
     def _query(self, table: str, **kwargs) -> pd.DataFrame:
         q = f"SELECT * FROM '{table}'"
         clauses = []
@@ -118,15 +121,6 @@ class Repository:
     def simple_query(
         self, q: str, bsize: int = DEFAULT_BSIZE
     ) -> Generator[dict, None, None]:
-        """Execute a query in batches. Returns a dict
-
-        Args:
-            q (str): query
-            bsize (int, optional): Batch size. Defaults to DEFAULT_BSIZE.
-
-        Yields:
-            Generator[dict, None, None]: Dataset (chunked)
-        """
         with self.connect() as con:
             res = con.execute(text(q))
             cols = [c[0] for c in res.cursor.description]  # type: ignore
@@ -141,7 +135,7 @@ class Repository:
     def query_batch(
         self, q: str, normalize: bool = True, bsize: int = DEFAULT_BSIZE
     ) -> Generator[pd.DataFrame, None, None]:
-        """Execute a query in batches. Returns a pandas dataframe
+        """Execute a query in batches. Returns a generator (pandas dataframe)
 
         Args:
             q (str): query
@@ -159,19 +153,11 @@ class Repository:
                 yield norm(pd.DataFrame.from_records(rows)) # type: ignore
 
     def query_count(self, q: str) -> int:
-        """Count number of items in the query
-
-        Args:
-            q (str): query
-
-        Returns:
-            int: number of results
-        """
         dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
         with self.connect() as con:
             d = (
                 res[0] if (res := con.execute(text(dq)).fetchone()) else 0
-            )  # <---- this destroys previous queries, so we need a new connection for it
+            )
             return d
 
     def query(
@@ -205,28 +191,26 @@ def find_host_col(repo: Repository, table: str) -> str | None:
 
 
 def add_hosts_from_records_table(
-    repo: Repository, table: str, col: Optional[str] = "ip"
+    repo: Repository, name: str, col: Optional[str] = "ip"
 ) -> None:
     if not col:
-        col = find_host_col(repo, table)
+        col = find_host_col(repo, name)
     if not col:
-        logger.debug(f"fialed to find a host column in {table}")
+        logger.debug(f"fialed to find a host column in {name}")
         return
 
     # NOTE: we don't have a model for random records, so we have to deal with this
-    q = f"""
-    SELECT DISTINCT t.{col} AS ip
-    FROM "{table}" AS t
-    WHERE NOT EXISTS (
-        SELECT NULL
-        FROM hosts
-        WHERE t.{col} = hosts.ip
-    )
-    """
+    tab = get_records_table(repo.connect(), name)
+    c = getattr(tab, col)
+    stmt = select(
+        c.distinct().label("ip").where(
+            ~exists().where(c == Host.ip)
+        )
+    ).compile(repo.connect())
 
-    n, gen = repo.query(q)
+    n, gen = repo.query(str(stmt))
     if not n:
-        logger.debug(f"no missing hosts from {table}")
+        logger.debug(f"no missing hosts from {name}")
         return
 
     with tqdm(total=n, desc="Hosts") as pbar:
@@ -235,6 +219,7 @@ def add_hosts_from_records_table(
             hosts = [new_host(ip=str(r.ip)) for r in b.itertuples()]
             repo.insert(hosts)
             pbar.update(len(b))
+
 
 def add_missing_hosts(repo: Repository) -> HealthCheck:
     def hc(e: Event):
@@ -248,7 +233,7 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
                     if name.endswith("_records")
                 ]
 
-            for (tab,) in tabs:
+            for tab, in tabs:
                 add_hosts_from_records_table(repo, tab)
             return
 
@@ -258,10 +243,14 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
     return hc
 
 
-# TODO: implement this
 def resume_cursors(repo: Repository) -> HealthCheck:
     def hc(_):
-        raise NotImplementedError
+        with repo.connect() as con:
+            stmt = select(Resource).where(Resource.cursor.index != -1)
+            rsrcs = con.execute(stmt).fetchall()
+            for res, in rsrcs:
+                r = new_resourcerer(res, True, DEFAULT_BSIZE)
+                r.cast(con)
     return hc
 
 
@@ -277,7 +266,7 @@ def load_repository(
     connector = new_connector(db)
     repo = new_repository(connector)
 
-    init_hc = []#resume_cursors(repo)]
+    init_hc = [resume_cursors(repo)]
     sync_hc = [add_missing_hosts(repo)]
 
     monitor = new_health_monitor(init_hc, sync_hc)
