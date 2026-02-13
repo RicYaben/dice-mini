@@ -27,9 +27,12 @@ class Maturity(StrEnum):
 @dataclass
 class Service:
     name: str
-    version: str
+    vendor: Optional[str]
+    version: Optional[str]
     cpe: Optional[str]
 
+# NOTE: this should be part of the connection summary in zgrab2 instead
+# of having to guess it from the results
 @dataclass
 class Record:
     # conn
@@ -42,12 +45,10 @@ class Record:
     access: list[Access]
     # service details
     service: Service
-    
 
 def make_record(row: pd.Series) -> Record:
     data = row.to_dict()
     return from_dict(Record, data)
-
 
 def eval_communication(r: pd.Series) -> bool:
     "determine whether the communication followed the protocol"
