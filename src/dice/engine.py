@@ -85,10 +85,10 @@ class Engine:
         # merge repeated cells visually
         rows = collapse_repeated(rows)
 
-        logger.info(
+        print(
             "\033[1mEngine information table.\033[0m  Includes loaded modules by components and signatures."
         )
-        logger.info(
+        print(
             tabulate(
                 rows,
                 headers=["Component", "Type", "Signature", "Collection", "Module"],
