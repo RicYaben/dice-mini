@@ -1,5 +1,4 @@
 from typing import Optional
-import pandas as pd
 from sqlalchemy import text
 from typing_extensions import Annotated
 
@@ -9,6 +8,7 @@ from dice.info import new_info
 
 import ujson
 import typer
+import pandas as pd
 
 query_app = typer.Typer(help="Query the database")
 

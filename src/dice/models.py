@@ -2,7 +2,8 @@ import uuid
 import pandas as pd
 
 from typing import Optional
-from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
+from sqlalchemy import Connection, MetaData, delete
+from sqlmodel import Field, Relationship, SQLModel, Session, Table, UniqueConstraint, select
 
 
 class Model(SQLModel):
@@ -34,11 +35,20 @@ class Resource(Model, table=True):
 
     cursor: "Cursor" = Relationship()
 
+    def flush_records(self, con: Connection):
+        with Session(con) as s:
+            src = s.exec(select(Source).where(Source.id == self.source_id)).first()
+            if not src:
+                return
+            
+            tab = get_records_table(con, src.name)
+            stmt = delete(tab).where(tab.c.resource_id == self.id)
+            s.exec(stmt)
+
 
 class Cursor(Model, table=True):
     resource_id: Optional[str] = Field(default=None, foreign_key="resource.id", unique=True)
     index: int = 0
-    done: bool = False
 
 
 class Host(Model, table=True):
@@ -110,3 +120,11 @@ class HostTag(Model, table=True):
     port: Optional[int] = None
 
     __table_args__ = (UniqueConstraint("host_id", "tag_id"),)
+
+
+def get_records_table(con: Connection, name: str, suffix: Optional[str] ="records", sep: Optional[str] ="_") -> Table:
+    meta = MetaData()
+    if sep and suffix:
+        name = sep.join([name, suffix])
+    table = Table(name, meta, autoload_with=con)
+    return table

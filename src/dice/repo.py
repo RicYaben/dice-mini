@@ -151,8 +151,8 @@ class Repository:
         Yields:
             Generator[pd.DataFrame, None, None]: Dataset (chunked)
         """
-        with self.connect() as ses:
-            res = ses.execute(text(q)).mappings()
+        with self.connect() as con:
+            res = con.execute(text(q)).mappings()
             norm = normalize_records if normalize else lambda x: x
 
             while rows := res.fetchmany(bsize):
@@ -213,14 +213,19 @@ def add_hosts_from_records_table(
         logger.debug(f"fialed to find a host column in {table}")
         return
 
-    # Check if hosts table exists
+    # NOTE: we don't have a model for random records, so we have to deal with this
     q = f"""
     SELECT DISTINCT t.{col} AS ip
     FROM "{table}" AS t
+    WHERE NOT EXISTS (
+        SELECT NULL
+        FROM hosts
+        WHERE t.{col} = hosts.ip
+    )
     """
 
     n, gen = repo.query(q)
-    if n == 0:
+    if not n:
         logger.debug(f"no missing hosts from {table}")
         return
 
@@ -235,7 +240,6 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
     def hc(e: Event):
         if "table" not in e.summary:
             logger.debug("adding hosts from all views...")
-            # TODO: no more views, do something like "get_records_tables" or just "get_tables"
             with repo.session() as s:
                 insp = inspect(s.get_bind())
                 tabs = [

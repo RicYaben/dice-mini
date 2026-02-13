@@ -88,13 +88,8 @@ class Sourcerer:
             return self._gen
         
         data = read_resource(self.rsrc.id.hex, self.rsrc.fpath, self.bsize)
-        if self.resume and not self.cursor.done:
-            for _ in range(self.cursor.index):
-                next(data, None)
-        else:
-            # we change the cursor to the beggining
-            self.cursor.index = 0
-            # TODO: delete all the records stored from this resource to avoid dupes
+        for _ in range(self.cursor.index):
+            next(data, None)
 
         self._gen = data
         return data
@@ -119,8 +114,13 @@ class Sourcerer:
         return df
 
     def cast(self, con: Connection) -> Generator[pd.DataFrame, None, None]:
-        data = self.load()
+        if not self.resume or self.cursor.index < 0:
+            # we change the cursor to the beggining
+            self.cursor.index = 0
+            # delete all the records stored from this resource to avoid dupes
+            self.rsrc.flush_records(con)
 
+        data = self.load()
         p = self.peek
         assert isinstance(p, pd.DataFrame)
 
@@ -136,7 +136,7 @@ class Sourcerer:
                 s.commit()
 
         with Session(con) as s:
-            self.cursor.done = True
+            self.cursor.index = -1
             s.add(self.rsrc)
             s.commit()
 

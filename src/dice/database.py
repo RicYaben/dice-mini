@@ -69,7 +69,7 @@ def insert_or_ignore(
 
 def get_or_create(session: Session, model, **kwargs):
     # Try to get existing
-    obj = session.exec(select(model).filter_by(**kwargs)).first()
+    obj = session.exec(select(model).filter_by(**kwargs)).first() # type: ignore
     if obj:
         return obj, False
 
@@ -91,14 +91,14 @@ class Connector:
     def __init__(
         self,
         location: Optional[str],
-        name: Literal["sqlite"] = "sqlite",
+        driver: Literal["sqlite"] = "sqlite",
     ) -> None:
         self.location = location if location else ":memory:"
-        self.name = name
+        self.driver = driver
         self.engine: Optional[Engine] = None
 
     def load(self):
-        e = create_engine(f"{self.name}:///{self.location}")
+        e = create_engine(f"{self.driver}:///{self.location}")
         SQLModel.metadata.create_all(e)
         
         self.engine = e
@@ -114,4 +114,4 @@ class Connector:
 
 
 def new_connector(db: Optional[str], name: Literal["sqlite"] = "sqlite") -> Connector:
-    return Connector(db, name=name)
+    return Connector(db, driver=name)
