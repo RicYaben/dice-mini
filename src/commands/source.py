@@ -3,7 +3,7 @@ import typer
 from dice.database import get_or_create
 from dice.loaders import walk
 from dice.models import Source
-from dice.records import add_resource
+from dice.resources import add_resource
 from dice.repo import load_repository
 from dice.config import DEFAULT_BSIZE
 

@@ -1,7 +1,5 @@
 from itertools import chain
-import os
 from typing import Generator, Optional
-
 from sqlalchemy import Connection
 from sqlmodel import Session
 from tqdm import tqdm
@@ -14,6 +12,7 @@ from dice.models import Resource, Cursor
 import ujson
 import pandas as pd
 import logging
+import os
 
 from dice.repo import Repository
 

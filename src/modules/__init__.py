@@ -1,4 +1,4 @@
-from dice.module import new_registry
+from dice.modules import new_registry
 
 registry = new_registry("core")
 

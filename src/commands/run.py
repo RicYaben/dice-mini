@@ -1,7 +1,6 @@
-from typing import Optional
 from dice.config import MFACTORY, DEFAULT_MODULES_DIR
-from dice.module import load_registry_plugins, new_component_manager, load_registry
-from dice.modules import registry as core
+from dice.modules import load_registry_plugins, new_component_manager, load_registry
+from modules import registry
 
 import dice
 import typer
@@ -46,7 +45,7 @@ def run(
             "--info",
             help="mock run"
         ),
-        registry: str | None = typer.Option(
+        reg: str | None = typer.Option(
             DEFAULT_MODULES_DIR,
             "--registry",
             help="Path to the directory containing module resitry"
@@ -56,12 +55,6 @@ def run(
             "--plugins",
             help="Load module registries as plugins"
         ),
-        save: Optional[str] = typer.Option(
-            None,
-            "-s"
-            "--sources-output",
-            help="Path to sources directory. Save sources locally outside the database"
-        )
     ):
     if not (command or components):
         raise Exception("command or componets required. DICE needs to know what to do")
@@ -71,11 +64,11 @@ def run(
     cc = parse_command(command) if command else [MFACTORY.get(c) for c in comps]
 
     manager = new_component_manager(id)
-    manager.register(core)
+    manager.register(registry)
 
     # plugin modules
-    if registry and (reg := load_registry(registry)):
-        manager.register(reg)
+    if reg and (r := load_registry(reg)):
+        manager.register(r)
 
     # registry plugins
     if plugins and (regs := load_registry_plugins(plugins)):
@@ -89,6 +82,6 @@ def run(
         engine.info()
         return
 
-    repo = load_repository(db=database, save=save)
+    repo = load_repository(db=database)
     engine.run(repo)
     

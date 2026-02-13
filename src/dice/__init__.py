@@ -1,5 +1,5 @@
-from dice.module import new_engine, new_fingerprinter, new_classifier
-from dice.helpers import new_fingerprint, new_label, new_fp_label
+from dice.engine import new_engine
+from dice.helpers import new_fingerprint, new_label, new_fp_label, new_fingerprinter, new_classifier
 
 __all__ = [
     "new_engine",
