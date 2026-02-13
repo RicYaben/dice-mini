@@ -12,13 +12,14 @@ def new_source(name: str) -> Source:
         name=name,
     ) 
 
-def new_label(module_name: str, name: str, short:  Optional[str]= None, description:  Optional[str]= None, mitigaton:  Optional[str]= None) -> Label:
+def new_label(module_name: str, name: str, short:  Optional[str]= None, description:  Optional[str]= None, mitigaton:  Optional[str]= None, level: int=0) -> Label:
     return Label(
         name=name,
         short=short,
         description=description,
         mitigation=mitigaton,
-        module_name=module_name
+        module_name=module_name,
+        level=level,
     )
 
 def new_fingerprint(module: str, host_id: str, record_id: str, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:

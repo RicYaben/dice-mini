@@ -23,7 +23,9 @@ dependencies = [
     "ujson",
     "pyarrow",
     "typer",
-    "sqlmodel"
+    "sqlmodel",
+    "dacite",
+    "cryptography"
 ]
 
 [tool.setuptools]

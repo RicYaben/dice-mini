@@ -57,7 +57,7 @@ def is_equal(v1, v2):
     try:
         if pd.isna(v1) and pd.isna(v2):
             return True
-    except:
+    except Exception:
         pass
 
     return v1 == v2

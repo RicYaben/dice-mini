@@ -79,6 +79,7 @@ class Label(Model, table=True):
     short: Optional[str] = None
     # mitigation strategy
     mitigation: Optional[str] = None
+    level: int = 0
 
 
 class FingerprintLabel(Model, table=True):
