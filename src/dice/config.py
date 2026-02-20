@@ -5,6 +5,8 @@ import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# TODO: I really despise globals, this should go away
+
 DATA_PREFIX: str = "data_"
 DEFAULT_MODULES_DIR: str = "modules"
 DEFAULT_BSIZE: int = 50_000

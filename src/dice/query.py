@@ -1,5 +1,6 @@
 from typing import Any
 
+# TODO: this may not be necessary anymore? we have moved to an ORM
 def parse_clause(clause: str, value: Any) -> str:
     # Operators
     ops = {

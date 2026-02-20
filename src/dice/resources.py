@@ -8,13 +8,12 @@ from dice.config import DEFAULT_BSIZE
 from dice.database import get_or_create
 from dice.loaders import read_resource
 from dice.models import Resource, Cursor
+from dice.repo import Repository
 
 import ujson
 import pandas as pd
 import logging
 import os
-
-from dice.repo import Repository
 
 logger = logging.getLogger(__name__)
 

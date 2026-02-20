@@ -1,3 +1,4 @@
+# TODO: this may need some love, the ORM changes a lot
 class InfoQueryBuilder:
     """
     Builds a single DuckDB SQL query to extract hosts, ports, services+labels, and tags

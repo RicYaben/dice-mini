@@ -1,5 +1,6 @@
 from dice.config import MFACTORY, DEFAULT_MODULES_DIR
-from dice.modules import load_registry_plugins, new_component_manager, load_registry
+from dice.modules import load_registry_plugins, load_registry
+from dice.components import new_component_manager
 from modules import registry
 
 import dice
