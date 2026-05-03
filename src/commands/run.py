@@ -6,7 +6,7 @@ from modules import registry
 import dice
 import typer
 
-from dice.repo import load_repository
+from dice.start import load_repository
 
 def parse_command(cmd: str):
     ts = MFACTORY.all()

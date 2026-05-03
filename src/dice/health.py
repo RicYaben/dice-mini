@@ -35,3 +35,4 @@ class HealthMonitor:
 
 def new_health_monitor(init: list[HealthCheck]=[], sync: list[HealthCheck]=[]) -> HealthMonitor:
     return HealthMonitor(init, sync)
+    

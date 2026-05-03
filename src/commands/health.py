@@ -1,6 +1,6 @@
 import typer
 
-from dice.repo import load_repository
+from dice.start import load_repository
 
 health_app = typer.Typer(help="Run healthchecks on a database")
 

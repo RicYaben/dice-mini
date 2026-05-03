@@ -1,15 +1,11 @@
-from tqdm import tqdm
-from typing import Any, Generator, Callable, Optional
-from sqlmodel import Session, exists, select, text
-from sqlalchemy import Connection, inspect
+from typing import Any, Generator, Callable
+from sqlmodel import Session, text
+from sqlalchemy import Connection
 
-from dice.health import HealthCheck, HealthMonitor, new_health_monitor
-from dice.helpers import new_collection, new_host
+from dice.health import HealthMonitor
+from dice.constructors import new_collection
 from dice.config import DEFAULT_BSIZE, DATA_PREFIX
-from dice.events import Event
-from dice.database import Connector, insert_or_ignore, new_connector
-from dice.models import Resource, Host, get_records_table
-from dice.resources import new_resourcerer
+from dice.database import Connector, insert_or_ignore
 
 import pandas as pd
 import ujson
@@ -177,97 +173,9 @@ class Repository:
         gen = self.query_batch(q, normalize, bsize)
         return (d, gen)
 
-
-def find_host_col(repo: Repository, table: str) -> str | None:
-    guesswork = {"ip", "saddr", "host", "addr"}
-    q = f"SELECT * FROM '{table}' LIMIT 0"
-
-    with repo.connect() as con:
-        res = con.execute(text(q))
-        cols = {desc[0].lower() for desc in res.cursor.description}  # type: ignore
-
-        common = guesswork & cols
-        return next(iter(common), None)
-
-
-def add_hosts_from_records_table(
-    repo: Repository, name: str, col: Optional[str] = "ip"
-) -> None:
-    if not col:
-        col = find_host_col(repo, name)
-    if not col:
-        logger.debug(f"fialed to find a host column in {name}")
-        return
-
-    # NOTE: we don't have a model for random records, so we have to deal with this
-    tab = get_records_table(repo.connect(), name)
-    c = getattr(tab, col)
-    stmt = select(
-        c.distinct().label("ip").where(
-            ~exists().where(c == Host.ip)
-        )
-    ).compile(repo.connect())
-
-    n, gen = repo.query(str(stmt))
-    if not n:
-        logger.debug(f"no missing hosts from {name}")
-        return
-
-    with tqdm(total=n, desc="Hosts") as pbar:
-        pbar.write("inserting missing hosts")
-        for b in gen:
-            hosts = [new_host(ip=str(r.ip)) for r in b.itertuples()]
-            repo.insert(hosts)
-            pbar.update(len(b))
-
-
-def add_missing_hosts(repo: Repository) -> HealthCheck:
-    def hc(e: Event):
-        if "table" not in e.summary:
-            logger.debug("adding hosts from all views...")
-            with repo.session() as s:
-                insp = inspect(s.get_bind())
-                tabs = [
-                    name
-                    for name in insp.get_table_names()
-                    if name.endswith("_records")
-                ]
-
-            for tab, in tabs:
-                add_hosts_from_records_table(repo, tab)
-            return
-
-        logger.debug("adding missing hosts...")
-        table = e.summary["table"]
-        add_hosts_from_records_table(repo, table)
-    return hc
-
-
-def resume_cursors(repo: Repository) -> HealthCheck:
-    def hc(_):
-        with repo.connect() as con:
-            stmt = select(Resource).where(Resource.cursor.index != -1)
-            rsrcs = con.execute(stmt).fetchall()
-            for res, in rsrcs:
-                r = new_resourcerer(res, True, DEFAULT_BSIZE)
-                r.cast(con)
-    return hc
-
-
 def new_repository(connector: Connector) -> Repository:
     return Repository(
         con=connector,
     )
 
 
-def load_repository(
-    db: str | None = None,
-) -> Repository:
-    connector = new_connector(db)
-    repo = new_repository(connector)
-
-    init_hc = [resume_cursors(repo)]
-    sync_hc = [add_missing_hosts(repo)]
-
-    monitor = new_health_monitor(init_hc, sync_hc)
-    return repo.load(monitor)

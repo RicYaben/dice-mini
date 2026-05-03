@@ -18,7 +18,7 @@ from dice.config import (
 
 from dice.repo import Repository
 from dice.models import Fingerprint, FingerprintLabel, HostTag, Label, Tag
-from dice.helpers import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
+from dice.constructors import new_label, new_fp_label, new_fingerprint, new_tag, new_host_tag
 
 logger = logging.getLogger(__name__)
 

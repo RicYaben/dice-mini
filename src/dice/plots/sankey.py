@@ -20,7 +20,7 @@ class Sankey:
             link=n.links
         ))
 
-def build_sankey(data: pd.DataFrame, *columns: str, prefix: str = "data_") -> Sankey:
+def build_sankey(data: pd.DataFrame, *columns: str, prefix: str = "") -> Sankey:
     '''
     Prepares a sankey object from the data in a repository
     '''
@@ -28,7 +28,7 @@ def build_sankey(data: pd.DataFrame, *columns: str, prefix: str = "data_") -> Sa
     return sankey
 
 
-def sankey_figure(data: pd.DataFrame, *columns: str, ids: list[str] = [], lconfs: list[LabConf] = [], prefix: str = "data_") -> go.Figure:
+def sankey_figure(data: pd.DataFrame, *columns: str, ids: list[str] = [], lconfs: list[LabConf] = [], prefix: str = "") -> go.Figure:
     '''
     Makes a simple sankey plot using the given columns and their order, from left to right.
     Multiple DFs are colored differently.

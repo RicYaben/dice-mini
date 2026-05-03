@@ -1,7 +1,8 @@
 from sqlite3 import IntegrityError
 from typing import Iterable, Literal, Optional, Type
 from sqlalchemy import Connection, Engine
-from sqlmodel import SQLModel, Session, UniqueConstraint, exists, select, insert, values, create_engine
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlmodel import SQLModel, Session, UniqueConstraint, select, insert, create_engine
 
 def insert_records(session: Session, model: Type, records: Iterable[dict]):
     """
@@ -28,40 +29,30 @@ def _get_unique_columns(model) -> list[str]:
 def insert_or_ignore(
     session: Session,
     model: Type,
-    items: Iterable[dict],
+    items: Iterable,
 ) -> None:
     items = list(items)
     if not items:
         return
 
     table = model.__table__
-    cols = list(items[0].keys())
+    cols = [c.name for c in table.columns]
+
+    # ORM objects → dict rows
+    rows = [
+        {c: getattr(item, c) for c in cols}
+        for item in items
+    ]
+
+    stmt = sqlite_insert(table).values(rows)
+
     unique_cols = _get_unique_columns(model)
-
-    # VALUES table (src_df equivalent)
-    src = values(
-        *[table.c[c] for c in cols],
-        name="src"
-    ).data(
-        [tuple(item[c] for c in cols) for item in items]
+    conflict_cols = (
+        unique_cols if isinstance(unique_cols, list) else [unique_cols]
     )
 
-    # WHERE NOT EXISTS (...)
-    not_exists = ~exists(
-        select(1).where(
-            *[
-                table.c[c] == src.c[c]
-                for c in unique_cols
-            ]
-        )
-    )
-
-    stmt = (
-        insert(table)
-        .from_select(
-            cols,
-            select(*[src.c[c] for c in cols]).where(not_exists)
-        )
+    stmt = stmt.on_conflict_do_nothing(
+        index_elements=conflict_cols
     )
 
     session.exec(stmt)

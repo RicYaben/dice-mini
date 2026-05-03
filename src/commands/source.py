@@ -4,7 +4,7 @@ from dice.database import get_or_create
 from dice.loaders import walk
 from dice.models import Source
 from dice.resources import add_resource
-from dice.repo import load_repository
+from dice.start import load_repository
 from dice.config import DEFAULT_BSIZE
 
 source_app = typer.Typer(help="Insert a source into the database")

@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from tabulate import tabulate
 
-from dice.config import MFACTORY, MType
+from dice.config import CLASSIFIER, FINGERPRINTER, MFACTORY, MType
 from dice.repo import Repository
 from dice.signatures import Signature, new_signature
 from dice.modules import Module, ModuleHandler, ModuleInit, defaultModuleInit, new_module, ModuleRegistry
@@ -36,6 +36,17 @@ class Component:
 
 def new_component(t: MType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
+
+def new_fingerprinter(
+    handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "fp"
+) -> Component:
+    return make_component(FINGERPRINTER, preffix, handler, init)
+
+
+def new_classifier(
+    handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "cls"
+) -> Component:
+    return make_component(CLASSIFIER, preffix, handler, init)
 
 @dataclass
 class ComponentFactory:

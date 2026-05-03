@@ -33,7 +33,7 @@ class Resource(Model, table=True):
     fpath: str = Field(unique=True)
     source_id: str = Field(default=None, foreign_key="source.id")
 
-    cursor: "Cursor" = Relationship()
+    cursor: Optional["Cursor"] = Relationship(back_populates="resource")
 
     def flush_records(self, con: Connection):
         with Session(con) as s:
@@ -41,14 +41,20 @@ class Resource(Model, table=True):
             if not src:
                 return
             
-            tab = get_records_table(con, src.name)
+            tab = get_records_table(con, src.name, suffix="records")
             stmt = delete(tab).where(tab.c.resource_id == self.id)
             s.exec(stmt)
 
 
 class Cursor(Model, table=True):
-    resource_id: Optional[str] = Field(default=None, foreign_key="resource.id", unique=True)
+    resource_id: Optional[str] = Field(
+        default=None,
+        foreign_key="resource.id",
+        unique=True
+    )
     index: int = 0
+
+    resource: Optional[Resource] = Relationship(back_populates="cursor")
 
     def update(self, con: Connection, i: int=1):
         self.index += i
@@ -133,7 +139,7 @@ class HostTag(Model, table=True):
     __table_args__ = (UniqueConstraint("host_id", "tag_id"),)
 
 
-def get_records_table(con: Connection, name: str, suffix: Optional[str] ="records", sep: Optional[str] ="_") -> Table:
+def get_records_table(con: Connection, name: str, suffix: Optional[str] = "", sep: Optional[str] ="_") -> Table:
     meta = MetaData()
     if sep and suffix:
         name = sep.join([name, suffix])

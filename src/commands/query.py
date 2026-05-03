@@ -2,7 +2,7 @@ from typing import Optional
 from sqlalchemy import text
 from typing_extensions import Annotated
 
-from dice.repo import load_repository
+from dice.start import load_repository
 from dice.ast import make_parser
 from dice.info import new_info
 
