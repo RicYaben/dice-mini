@@ -87,9 +87,9 @@ class Module:
         self.repo().insert([tag])
     # ----
 
-    def make_label(self, fp: str, lab: str, comment: str = "") -> FingerprintLabel:
+    def make_label(self, fp: int, lab: str, comment: str = "") -> FingerprintLabel:
         slab = self._labels[lab]
-        return new_fp_label(fp, slab.id.hex)
+        return new_fp_label(fp, slab.id)
 
     def make_fingerprint(
         self, rec: Any, data: dict, protocol: str = "-"
@@ -106,14 +106,14 @@ class Module:
 
     def make_tag(
         self,
-        host: str,
+        host: int,
         tag: str,
         details: str = "",
         protocol: str = "-",
         port: int = -1,
     ) -> HostTag:
         t = self._tags[tag]
-        return new_host_tag(host, t.id.hex, details, protocol, port)
+        return new_host_tag(host, t.id, details, protocol, port)
 
     def make_fp_tag(self, fp, tag: str, details: str = "") -> HostTag:
         return self.make_tag(fp["host"], tag, details, fp["protocol"], fp["port"])

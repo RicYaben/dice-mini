@@ -17,7 +17,7 @@ def new_label(module_name: str, name: str, short:  Optional[str]= None, descript
         level=level,
     )
 
-def new_fingerprint(module: str, host_id: str, record_id: str, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:
+def new_fingerprint(module: str, host_id: int, record_id: int, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:
     return Fingerprint(
         host_id=host_id,
         record_id=record_id,
@@ -27,7 +27,7 @@ def new_fingerprint(module: str, host_id: str, record_id: str, data: str, protoc
         protocol=protocol
     )
 
-def new_fp_label(fp_id: str, label_id: str) -> FingerprintLabel:
+def new_fp_label(fp_id: int, label_id: int) -> FingerprintLabel:
     return FingerprintLabel(fingerprint_id=fp_id, label_id=label_id)
 
 def new_tag(module_name: str, name: str, description: str="-") -> Tag:
@@ -37,7 +37,7 @@ def new_tag(module_name: str, name: str, description: str="-") -> Tag:
         module_name=module_name
     )
 
-def new_host_tag(host_id: str, tag_id: str, details: Optional[str] = None, protocol: Optional[str]= None, port: Optional[int] = None) -> HostTag:
+def new_host_tag(host_id: int, tag_id: int, details: Optional[str] = None, protocol: Optional[str]= None, port: Optional[int] = None) -> HostTag:
     return HostTag(host_id=host_id, tag_id=tag_id, details=details, protocol=protocol, port=port)
 
 def new_host(ip: str, domain: str = "", prefix: str ="", asn: str = "") -> Host:

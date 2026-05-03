@@ -27,7 +27,7 @@ class InfoQueryBuilder:
                 SELECT
                     f.host AS ip,
                     list(DISTINCT f.port ORDER BY f.port) AS ports
-                FROM {db_prefix}fingerprints f
+                FROM {db_prefix}fingerprint f
                 WHERE f.host IN ({host_list})
                 GROUP BY f.host
             ) AS ports_sub
@@ -54,7 +54,7 @@ class InfoQueryBuilder:
                     ) AS services
                 FROM (
                     SELECT *
-                    FROM {db_prefix}fingerprints f
+                    FROM {db_prefix}fingerprint f
                     WHERE f.host IN ({host_list})
                 ) AS f
                 LEFT JOIN (

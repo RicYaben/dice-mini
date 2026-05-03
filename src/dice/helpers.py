@@ -8,8 +8,6 @@ from dice.loaders import Loader
 from dice.modules import Module, ModuleHandler
 from dice.query import query_db, query_records
 
-from dice.records import eval_communication, eval_encryption, eval_status
-
 def new_source(name: str) -> Source:
     return Source(
         name=name,
@@ -33,24 +31,25 @@ def zgrab2_handler(
     fp_cb: FPCallback,
     protocol: str,
 ) -> RowHandler:
+
     def handler(r: pd.Series):
-        is_proto = eval_communication(r), # true or false
+        # TODO: this in the future
+        # is_proto = eval_communication(r), # true or false
 
-        # return early, is a false-positive
-        if not is_proto:
-            return
+        # # return early, is a false-positive
+        # if not is_proto:
+        #     return
 
-        base = {
-            "is_protocol": is_proto,
-            "connection": eval_status(r), # connected, refused
-            "encryption": eval_encryption(r), # TLS, DTLS, or whatever other scheme; otherwise None
-            "certificates": r.get("data_certificates", None)
-        }
+        # base = {
+        #     "is_protocol": is_proto,
+        #     "connection": eval_status(r), # connected, refused
+        #     "encryption": eval_encryption(r), # TLS, DTLS, or whatever other scheme; otherwise None
+        #     "certificates": r.get("data_certificates", None)
+        # }
 
         if fp := fp_cb(r):
-            base.update(fp)
-
-        mod.store(mod.make_fingerprint(r, base, protocol))
+            #base.update(fp)
+            mod.store(mod.make_fingerprint(r, fp, protocol))
     return handler
 
 def make_fp_handler(
@@ -87,7 +86,7 @@ def make_cls_handler(
             with repo.session() as ses:
                 insert_or_ignore(ses, FingerprintLabel, labs)
 
-        q = query_db("fingerprints", protocol=protocol)
+        q = query_db("fingerprint", protocol=protocol)
         mod.with_pbar(handler, q)
 
     return wrapper

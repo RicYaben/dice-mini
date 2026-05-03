@@ -36,4 +36,4 @@ def add(
         src, _ = get_or_create(s, Source, name=name)
 
     for p in walk(fpath):
-        add_resource(repo, name, src.id.hex, str(p), resume=resume, bsize=batch)
+        add_resource(repo, name, src.id, str(p), resume=resume, bsize=batch)

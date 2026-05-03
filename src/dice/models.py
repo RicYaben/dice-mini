@@ -1,4 +1,3 @@
-import uuid
 import pandas as pd
 
 from typing import Optional
@@ -7,7 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel, Session, Table, UniqueConstr
 
 
 class Model(SQLModel):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: int = Field(default=0, primary_key=True)
 
     def to_dict(self) -> dict:
         return self.model_dump()
@@ -31,9 +30,9 @@ class Source(Model, table=True):
 
 class Resource(Model, table=True):
     fpath: str = Field(unique=True)
-    source_id: str = Field(default=None, foreign_key="source.id")
+    source_id: int = Field(default=None, foreign_key="source.id")
 
-    cursor: Optional["Cursor"] = Relationship(back_populates="resource")
+    cursor: "Cursor" = Relationship(back_populates="resource")
 
     def flush_records(self, con: Connection):
         with Session(con) as s:
@@ -47,23 +46,23 @@ class Resource(Model, table=True):
 
 
 class Cursor(Model, table=True):
-    resource_id: Optional[str] = Field(
+    resource_id: int = Field(
         default=None,
         foreign_key="resource.id",
         unique=True
     )
-    index: int = 0
+    idx: int = 0
 
-    resource: Optional[Resource] = Relationship(back_populates="cursor")
+    resource: Resource = Relationship(back_populates="cursor")
 
     def update(self, con: Connection, i: int=1):
-        self.index += i
+        self.idx += i
         with Session(con) as s:
             s.add(self)
             s.commit()
 
     def done(self, con: Connection):
-        self.index=-1
+        self.idx=-1
         with Session(con) as s:
             s.add(self)
             s.commit()
@@ -78,10 +77,10 @@ class Host(Model, table=True):
 
 class Fingerprint(Model, table=True):
     # Host (ip)
-    host_id: Optional[str] = Field(default=None, foreign_key="host.id")
+    host_id: Optional[int] = Field(default=None, foreign_key="host.id")
     # ID of the record related to
-    record_id: Optional[str]
-    source_id: Optional[str] = Field(default=None, foreign_key="source.id")
+    record_id: Optional[int]
+    source_id: Optional[int] = Field(default=None, foreign_key="source.id")
 
     # data, is a dict
     data: str
@@ -111,9 +110,9 @@ class Label(Model, table=True):
 
 class FingerprintLabel(Model, table=True):
     # ID of the fingerprint
-    fingerprint_id: Optional[str] = Field(default=None, foreign_key="fingerprint.id")
+    fingerprint_id: Optional[int] = Field(default=None, foreign_key="fingerprint.id")
     # ID of the label
-    label_id: Optional[str] = Field(default=None, foreign_key="label.id")
+    label_id: Optional[int] = Field(default=None, foreign_key="label.id")
 
     __table_args__ = (UniqueConstraint("fingerprint_id", "label_id"),)
 
@@ -126,9 +125,9 @@ class Tag(Model, table=True):
 
 class HostTag(Model, table=True):
     # Host (ip)
-    host_id: Optional[str] = Field(default=None, foreign_key="host.id")
+    host_id: Optional[int] = Field(default=None, foreign_key="host.id")
     # ID of hte Tag
-    tag_id: Optional[str] = Field(default=None, foreign_key="tag.id")
+    tag_id: Optional[int] = Field(default=None, foreign_key="tag.id")
     # further details
     details: Optional[str] = None
 

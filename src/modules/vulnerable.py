@@ -151,7 +151,7 @@ def vulnerable_cls_handler(mod: Module) -> None:
         if Access.EXECUTE in acc:
             mod.store(mod.make_label(fid, "execute-access"))
 
-    q = query_db("fingerprints")
+    q = query_db("fingerprint")
     mod.itemize(q, handler, orient="rows")
 
 def make_classifier() -> Module:

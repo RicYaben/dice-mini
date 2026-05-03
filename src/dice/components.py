@@ -180,12 +180,14 @@ class ComponentManager:
         )
         if modules != ["*"]:
             logger.info(f"Queries: {', '.join(modules)}")
-        logger.info(
-            tabulate(
+
+        msg = tabulate(
                 rows,
                 headers=["Collection", "Type", "Module"],
                 tablefmt="rounded_outline",
             )
+        logger.info(
+            f"Modules:\n{msg}"
         )
 
 

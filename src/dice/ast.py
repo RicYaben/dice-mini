@@ -137,8 +137,8 @@ class QueryTransformer(Transformer):
 
 
 TABLE_MAP = {
-    "port": "fingerprints",
-    "service": "fingerprints",
+    "port": "fingerprint",
+    "service": "fingerprint",
     "tag": "tags",
     "label": "labels",
 }
@@ -269,17 +269,17 @@ class SQLBuilder:
         if table == "hosts":
             return
 
-        if table == "fingerprints":
-            self.join("LEFT JOIN fingerprints ON fingerprints.host = hosts.ip")
+        if table == "fingerprint":
+            self.join("LEFT JOIN fingerprint ON fingerprint.host = hosts.ip")
         elif table == "tags":
             # join through host_tags
             self.join("LEFT JOIN host_tags ON host_tags.host = hosts.ip")
             self.join("LEFT JOIN tags ON tags.id = host_tags.tag_id")
         elif table == "labels":
-            self.ensure_join("fingerprints")
+            self.ensure_join("fingerprint")
             # join through host_labels
             self.join(
-                "LEFT JOIN fingerprint_labels ON fingerprint_labels.fingerprint_id = fingerprints.id"
+                "LEFT JOIN fingerprint_labels ON fingerprint_labels.fingerprint_id = fingerprint.id"
             )
             self.join("LEFT JOIN labels ON labels.id = fingerprint_labels.label_id")
 

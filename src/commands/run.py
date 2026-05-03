@@ -3,10 +3,10 @@ from dice.modules import load_registry_plugins, load_registry
 from dice.components import new_component_manager
 from modules import registry
 
-import dice
 import typer
 
 from dice.start import load_repository
+from dice.engine import new_engine
 
 def parse_command(cmd: str):
     ts = MFACTORY.all()
@@ -77,7 +77,7 @@ def run(
             manager.register(r)
 
     cb = manager.build(types=cc, modules=mods)
-    engine = dice.new_engine(*cb)
+    engine = new_engine(*cb)
     if info:
         manager.info(mods)
         engine.info()

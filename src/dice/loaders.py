@@ -51,9 +51,9 @@ def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]
             return lambda x: x
         
 def jsonl_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
-        # NOTE: engine pyarrow does not support chunking
-        for c in pd.read_json(p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size):
-            yield c
+    # NOTE: engine pyarrow does not support chunking
+    for c in pd.read_json(p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size):
+        yield c
             
 
 def csv_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
@@ -69,7 +69,7 @@ def get_reader(ext: str):
         case _:
             raise Exception(f"usupported file extension: {ext}")
         
-def read_resource(resource_id: str, fpath: str, batch_size: int) -> Generator[pd.DataFrame, None, None]:
+def read_resource(resource_id: int, fpath: str, batch_size: int) -> Generator[pd.DataFrame, None, None]:
     p = Path(fpath)
     reader = get_reader(p.suffixes[0])
     for c in reader(p, batch_size):

@@ -1,13 +1,14 @@
 from itertools import chain
 from typing import Generator, Optional
-from sqlalchemy import Connection
+from sqlalchemy import Connection, select
 
+from sqlmodel import Session
 from tqdm import tqdm
 
 from dice.config import DEFAULT_BSIZE
 from dice.database import get_or_create
-from dice.loaders import read_resource
-from dice.models import Resource, Cursor
+from dice.loaders import read_resource, get_loader_normalizer
+from dice.models import Resource, Cursor, Source
 from dice.repo import Repository
 
 import ujson
@@ -17,6 +18,21 @@ import os
 
 logger = logging.getLogger(__name__)
 
+def load_resource(con: Connection, res_id: int):
+    stmt = (
+        select(Resource, Cursor, Source)
+        .select_from(Resource)
+        .join(Cursor, Cursor.resource_id == Resource.id)
+        .join(Source, Source.id == Resource.source_id)
+        .where(Resource.id == res_id)
+    )
+
+    with Session(con) as s:
+        row = s.exec(stmt).first()
+        if not row:
+            raise ValueError(f"resource not found: {res_id}")
+        return row.tuple()
+    
 
 class Sourcerer:
     """Something to load sources"""
@@ -27,15 +43,15 @@ class Sourcerer:
     _oc: list[str] = []
     _ic: list[str] = []
 
-    def __init__(self, rsrc: Resource, resume: bool, bsize: int) -> None:
+    def __init__(self, res_id: int, resume: bool, bsize: int) -> None:
+        self.res_id = res_id
         self.resume = resume
         self.bsize = bsize
-        self.rsrc = rsrc
     
     @property
     def peek(self) -> pd.DataFrame | None:
         if not self._gen:
-            self.load()
+            raise Exception("resource not loaded")
 
         if self._peeked:
             return self._peek
@@ -56,7 +72,7 @@ class Sourcerer:
             return (self._oc, self._ic)
         
         if self.empty():
-            raise ValueError(f"unable to get columns: empty source {self.rsrc.fpath}") 
+            raise ValueError(f"unable to get columns: empty source") 
 
         p = self.peek
         assert isinstance(p, pd.DataFrame)
@@ -78,26 +94,26 @@ class Sourcerer:
         self._ic = ic
         return (oc, ic)
     
-    def exists(self) -> bool:
-        return os.path.exists(self.rsrc.fpath)
+    def exists(self, fpath: str) -> bool:
+        return os.path.exists(fpath)
     
-    def load(self) -> Generator[pd.DataFrame, None, None]:
+    def load(self, fpath: str, i: int = 0) -> None:            
         if self._gen:
-            return self._gen
+            return
         
-        data = read_resource(self.rsrc.id.hex, self.rsrc.fpath, self.bsize)
-        for _ in range(self.rsrc.cursor.index):
-            next(data, None)
+        gen = read_resource(self.res_id, fpath, self.bsize)
+        for _ in range(i):
+            next(gen, None)
 
-        self._gen = data
-        return data
+        print(f"there is a gen: {fpath}")
+        self._gen = gen
 
     def reset(self):
         self._gen = None
         self._peek = None
         self._peeked = False
 
-    def format_columns(self, df: pd.DataFrame, oc, ic: list[str]) -> pd.DataFrame:
+    def format_columns(self, df: pd.DataFrame, res_id: int, oc, ic: list[str]) -> pd.DataFrame:
         # convert to string dict and list cols
         for col in oc:
             df[col] = df[col].map(
@@ -108,24 +124,28 @@ class Sourcerer:
         for col in ic:
             df[col] = pd.to_numeric(df[col], errors="coerce", dtype_backend="pyarrow", downcast="float")
 
-        df["resource_id"] = [self.rsrc.id.hex for _ in range(len(df))]
+        df["resource_id"] = res_id
         return df
 
     def cast(self, con: Connection) -> Generator[pd.DataFrame, None, None]:
-        cursor = self.rsrc.cursor
-        if not self.resume or cursor.index < 0:
+        res, cursor, src = load_resource(con, self.res_id)
+        
+        if not self.resume or cursor.idx < 0:
             # we change the cursor to the beggining
-            cursor.index = 0
+            cursor.idx = 0
             # delete all the records stored from this resource to avoid dupes
-            self.rsrc.flush_records(con)
+            res.flush_records(con)
 
-        data = self.load()
+        self.load(res.fpath, cursor.idx)
         p = self.peek
         assert isinstance(p, pd.DataFrame)
+        assert self._gen
 
         oc, ic = self.columns
-        for c in chain([p], data):
-            fmt = self.format_columns(c, oc, ic)
+        norm = get_loader_normalizer(src.name)
+        for df in chain([p], self._gen):
+            ret = norm(df)
+            fmt = self.format_columns(ret, self.res_id, oc, ic)
             yield fmt
             cursor.update(con)
 
@@ -137,30 +157,29 @@ class Sourcerer:
         p = self.peek
         return p is None or p.empty
     
-    def check(self):
-        if not self.exists():
-            raise ValueError(f"source not found: {self.rsrc.fpath}")
+    def check(self, fpath: str):
+        if not self.exists(fpath):
+            raise ValueError(f"source not found: {fpath}")
         if self.empty():
-            raise ValueError(f"empty resource: {self.rsrc.fpath}")
+            raise ValueError(f"empty resource: {fpath}")
 
 
-def new_resourcerer(resource: Resource, resume: bool, bsize: int) -> Sourcerer:
-    return Sourcerer(resource, resume, bsize)
+def new_resourcerer(res_id: int, resume: bool, bsize: int) -> Sourcerer:
+    return Sourcerer(res_id, resume, bsize)
 
 
-def add_resource(repo: Repository, name: str, source: str, fpath: str, resume: bool = True, bsize: int = DEFAULT_BSIZE):
+def add_resource(repo: Repository, name: str, source: int, fpath: str, resume: bool = True, bsize: int = DEFAULT_BSIZE):
         logger.info(f"adding resource from {fpath} ({bsize}/b)")
 
         # load the resource or create it with its cursor
         with repo.session() as s:
             res, _ = get_or_create(s, Resource, fpath=fpath, source_id=source)
-            cursor, _ = get_or_create(s, Cursor, resource_id=res.id.hex)
+            cursor, _ = get_or_create(s, Cursor, resource_id=res.id)
             res.cursor = cursor
             s.commit()
             s.refresh(res)
 
-            sourcerer = new_resourcerer(res, resume, bsize)
-            sourcerer.load()
+            sourcerer = new_resourcerer(res.id, resume, bsize)
 
         with repo.connect() as con:
             gen = sourcerer.cast(con)

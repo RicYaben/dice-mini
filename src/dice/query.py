@@ -60,7 +60,7 @@ def query_db(db: str, **clauses) -> str:
 
 
 def query_records(source: str, **clauses) -> str:
-    return query_db(f"records_{source}", **clauses)
+    return query_db(f"{source}_records", **clauses)
 
 
 def query_serv_ports(zpcount_limit: int | None = None) -> str:
@@ -74,8 +74,8 @@ def query_serv_ports(zpcount_limit: int | None = None) -> str:
         COUNT(DISTINCT z.sport) AS zpcount,
         LIST(DISTINCT f.port) as fports,
         LIST(DISTINCT z.sport) as zports,
-    FROM fingerprints AS f
-    LEFT JOIN records_zmap AS z
+    FROM fingerprint AS f
+    LEFT JOIN zmap_records AS z
         ON f.host = z.saddr
         -- remove tnis, our study contains traces of HART-IP, OPC UA, and S7
         AND z.sport NOT IN (102, 4840, 5094)
@@ -91,7 +91,7 @@ def query_prefix_hosts(**clauses) -> str:
     SELECT
         h.prefix,
         COUNT(DISTINCT h.ip) AS count
-    FROM hosts AS h
+    FROM host AS h
     {clauses}
     GROUP BY h.prefix
     """,

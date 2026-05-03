@@ -11,17 +11,17 @@ from dice.resources import new_resourcerer
 
 def resume_cursors(repo: Repository) -> HealthCheck:
     def hc(_):
-        with repo.connect() as con:
-            stmt = (
-                select(Resource)
-                .join(Cursor)  # or .join(Resource.cursor)
-                .where(Cursor.index != -1)
-            )
-            
-            rsrcs = con.execute(stmt).fetchall()
-            for res, in rsrcs:
-                r = new_resourcerer(res, True, DEFAULT_BSIZE)
-                r.cast(con)
+        con = repo.connect()
+        stmt = (
+            select(Resource)
+            .join(Cursor)
+            .where(Cursor.idx != -1)
+        )
+
+        rows = con.execute(stmt).all()
+        for res in rows:
+            r = new_resourcerer(res.id, True, DEFAULT_BSIZE)
+            r.cast(con)
     return hc
 
 

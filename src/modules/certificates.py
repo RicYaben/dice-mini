@@ -153,5 +153,5 @@ def scan_certificates(mod: Module) -> None:
                 return
             
             mod.store(cert)
-    mod.with_pbar(handler, query_db("fingerprints", prefix=""), desc="certificates")
+    mod.with_pbar(handler, query_db("fingerprint", prefix=""), desc="certificates")
         
