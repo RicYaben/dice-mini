@@ -55,17 +55,13 @@ class Cursor(Model, table=True):
 
     resource: Resource = Relationship(back_populates="cursor")
 
-    def update(self, con: Connection, i: int=1):
+    def update(self, s: Session, i: int=1):
         self.idx += i
-        with Session(con) as s:
-            s.add(self)
-            s.commit()
+        s.commit()
 
-    def done(self, con: Connection):
+    def done(self, s: Session):
         self.idx=-1
-        with Session(con) as s:
-            s.add(self)
-            s.commit()
+        s.commit()
 
 class Host(Model, table=True):
     ip: str = Field(unique=True)

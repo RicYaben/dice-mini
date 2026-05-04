@@ -35,25 +35,27 @@ def add_hosts_from_records_table(
         return
 
     # NOTE: we don't have a model for random records, so we have to deal with this
-    tab = get_records_table(repo.connect(), name)
-    c = getattr(tab.c, col)
-    stmt = select(
-        c.distinct().label("ip")
-    ).where(
-        ~exists().where(c == Host.ip)
-    ).compile(repo.connect())
+    with repo.connect() as con:
+        tab = get_records_table(con, name)
+        c = getattr(tab.c, col)
+    
+        stmt = select(
+            c.distinct().label("ip")
+        ).where(
+            ~exists().where(c == Host.ip)
+        ).compile(con)
 
-    n, gen = repo.query(str(stmt))
-    if not n:
-        logger.debug(f"no missing hosts from {name}")
-        return
+        n, gen = repo.query(str(stmt), norm=None)
+        if not n:
+            logger.debug(f"no missing hosts from {name}")
+            return
 
-    with tqdm(total=n, desc="Hosts") as pbar:
-        pbar.write("inserting missing hosts")
-        for b in gen:
-            hosts = [new_host(ip=str(r.ip)) for r in b.itertuples()]
-            repo.insert(hosts)
-            pbar.update(len(b))
+        with tqdm(total=n, desc="Hosts") as pbar:
+            pbar.write("inserting missing hosts")
+            for b in gen:
+                hosts = [new_host(ip=str(r.ip)) for r in b.itertuples()]
+                repo.insert(hosts, con=con)
+                pbar.update(len(b))
 
 
 def add_missing_hosts(repo: Repository) -> HealthCheck:

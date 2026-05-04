@@ -63,12 +63,15 @@ class Repository:
     def session(self) -> Session:
         return self.con.session()
 
-    def insert(self, items: list[Any], policy=insert_or_ignore):
+    def insert(self, items: list[Any], policy=insert_or_ignore, con: Connection | None = None):
         if not items:
             return
 
         model = type(items[0])
-        with self.session() as s:
+        if not con:
+            con = self.connect()
+
+        with Session(con) as s:
             policy(s, model, items)
 
     def simple_query(

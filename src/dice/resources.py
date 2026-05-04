@@ -18,7 +18,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def load_resource(con: Connection, res_id: int):
+def load_resource(s: Session, res_id: int):
     stmt = (
         select(Resource, Cursor, Source)
         .select_from(Resource)
@@ -27,11 +27,10 @@ def load_resource(con: Connection, res_id: int):
         .where(Resource.id == res_id)
     )
 
-    with Session(con) as s:
-        row = s.exec(stmt).first()
-        if not row:
-            raise ValueError(f"resource not found: {res_id}")
-        return row.tuple()
+    row = s.exec(stmt).first()
+    if not row:
+        raise ValueError(f"resource not found: {res_id}")
+    return row.tuple()
     
 
 class Sourcerer:
@@ -128,30 +127,31 @@ class Sourcerer:
         return df
 
     def cast(self, con: Connection) -> Generator[pd.DataFrame, None, None]:
-        res, cursor, src = load_resource(con, self.res_id)
-        
-        if not self.resume or cursor.idx < 0:
-            # we change the cursor to the beggining
-            cursor.idx = 0
-            # delete all the records stored from this resource to avoid dupes
-            res.flush_records(con)
+        with Session(con) as s:
+            res, cursor, src = load_resource(s, self.res_id)
+            
+            if not self.resume or cursor.idx < 0:
+                # we change the cursor to the beggining
+                cursor.idx = 0
+                # delete all the records stored from this resource to avoid dupes
+                res.flush_records(con)
 
-        self.load(res.fpath, cursor.idx)
-        p = self.peek
-        assert isinstance(p, pd.DataFrame)
-        assert self._gen
+            self.load(res.fpath, cursor.idx)
+            p = self.peek
+            assert isinstance(p, pd.DataFrame)
+            assert self._gen
 
-        oc, ic = self.columns
-        norm = get_loader_normalizer(src.name)
-        for df in chain([p], self._gen):
-            ret = norm(df)
-            fmt = self.format_columns(ret, self.res_id, oc, ic)
-            yield fmt
-            cursor.update(con)
+            oc, ic = self.columns
+            norm = get_loader_normalizer(src.name)
+            for df in chain([p], self._gen):
+                ret = norm(df)
+                fmt = self.format_columns(ret, self.res_id, oc, ic)
+                yield fmt
+                cursor.update(s)
 
-        cursor.done(con)
-        # reset the peek and generator
-        self.reset()
+            cursor.done(s)
+            # reset the peek and generator
+            self.reset()
 
     def empty(self) -> bool:
         p = self.peek
