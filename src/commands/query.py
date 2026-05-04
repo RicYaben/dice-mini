@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import text, MetaData
+from sqlalchemy import MetaData
 from typing_extensions import Annotated
 
 from dice.start import load_repository
@@ -79,7 +79,7 @@ def query(
 
             rows = con.execute(iq).mappings().all()
             df = pd.DataFrame(rows)
-            
+
             if "services" in df.columns:
                 df["services"] = df["services"].apply(normalize_services)
 

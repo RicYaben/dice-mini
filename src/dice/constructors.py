@@ -43,8 +43,8 @@ def new_tag(module_name: str, name: str, description: str="-") -> Tag:
         module_name=module_name
     )
 
-def new_host_tag(host_id: int, tag_id: int, details: Optional[str] = None, protocol: Optional[str]= None, port: Optional[int] = None) -> HostTag:
-    return HostTag(host_id=host_id, tag_id=tag_id, details=details, protocol=protocol, port=port)
+def new_host_tag(host: str, tag_id: int, details: Optional[str] = None, protocol: Optional[str]= None, port: Optional[int] = None) -> HostTag:
+    return HostTag(host=host, tag_id=tag_id, details=details, protocol=protocol, port=port)
 
 def new_host(ip: str, domain: str = "", prefix: str ="", asn: str = "") -> Host:
     ipaddress.ip_address(ip) # this panics if not an ip address

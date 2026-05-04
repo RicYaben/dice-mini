@@ -20,5 +20,6 @@ def diff(
         flist = list(set(flist) - set(exclude.split(",")))
 
     r1 = new_repository(new_connector(d1))
-    compare(r1, d2, q, flist, output)
+    r2 = new_repository(new_connector(d2))
+    compare(r1, r2, q, flist, output)
 
