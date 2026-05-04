@@ -2,94 +2,65 @@ import pandas as pd
 
 from typing import Any, Callable, Generator, Iterable
 
-from dice.database import insert_or_ignore
-from dice.models import Source,  FingerprintLabel
+import ujson
+
+from dice.config import DATA_PREFIX
+from dice.models import Source
 from dice.loaders import Loader
-from dice.modules import Module, ModuleHandler
-from dice.query import query_db, query_records
 
 def new_source(name: str) -> Source:
     return Source(
         name=name,
     ) 
 
-FPCallback = Callable[[pd.Series], dict | None]
-RowHandler = Callable[[pd.Series], None]
+def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
+    # cannot parse
+    if not df.iloc[0].get("data", None):
+        return df
 
-def default_handler(
-    mod: Module,
-    fp_cb: FPCallback,
-    protocol: str,
-) -> RowHandler:
-    def handler(r: pd.Series):
-        if fp := fp_cb(r):
-            mod.store(mod.make_fingerprint(r, fp, protocol))
-    return handler
+    parsed = df["data"].map(ujson.loads)
+    rdf = pd.json_normalize(parsed.tolist(), max_level=0).add_prefix(prefix)
+    norm = pd.concat(
+        [df.drop(columns=["data"]).reset_index(drop=True), rdf.reset_index(drop=True)],
+        axis=1,
+    )
+    return norm
 
-def zgrab2_handler(
-    mod: Module,
-    fp_cb: FPCallback,
-    protocol: str,
-) -> RowHandler:
 
-    def handler(r: pd.Series):
-        # TODO: this in the future
-        # is_proto = eval_communication(r), # true or false
+def normalize_zgrab2_records(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
+    parsed = df["data"].apply(ujson.loads)
 
-        # # return early, is a false-positive
-        # if not is_proto:
-        #     return
+    # Flatten the 'result' dict
+    rdf = pd.json_normalize(parsed.tolist(), max_level=1)
+    rdf.columns = rdf.columns.str.removeprefix("result.")
+    rdf = rdf.add_prefix(prefix)
 
-        # base = {
-        #     "is_protocol": is_proto,
-        #     "connection": eval_status(r), # connected, refused
-        #     "encryption": eval_encryption(r), # TLS, DTLS, or whatever other scheme; otherwise None
-        #     "certificates": r.get("data_certificates", None)
-        # }
+    # Concatenate original df (without 'data') and flattened result columns
+    norm = pd.concat(
+        [df.drop(columns=["data"]).reset_index(drop=True), rdf.reset_index(drop=True)],
+        axis=1,
+    )
 
-        if fp := fp_cb(r):
-            #base.update(fp)
-            mod.store(mod.make_fingerprint(r, fp, protocol))
-    return handler
+    return norm
 
-def make_fp_handler(
-    fp_cb: FPCallback,
-    protocol: str = "-",
-    source: str = "zgrab2",
-) -> ModuleHandler:
-    def wrapper(mod: Module) -> None:
-        match source:
-            case "zgrab2":
-                h = zgrab2_handler(mod, fp_cb, protocol)
-            case _:
-                h = default_handler(mod, fp_cb, protocol)
 
-        q = query_records(source=source, protocol=protocol)
-        mod.itemize(q, h, orient="rows")
-    return wrapper
+def get_normalizer(src: str) -> Callable[[pd.DataFrame], pd.DataFrame]:
+    """each record contains a source_name and an id, that is enough"""
+    
 
-def make_cls_handler(
-    cls_cb: Callable[[pd.Series], str | None], protocol="-"
-) -> ModuleHandler:
-    def wrapper(mod: Module) -> None:
-        repo = mod.repo()
+    match src:
+        case "zgrab2":
+            def ret(df: pd.DataFrame):
+                return normalize_zgrab2_records(df, DATA_PREFIX)
+            return ret
+        case _:
+            def ret(df: pd.DataFrame):
+                return normalize_data(df, DATA_PREFIX)
+            return ret
 
-        def handler(df: pd.DataFrame):
-            labs = []
-            for _, fp in df.iterrows():
-                if lab := cls_cb(fp):
-                    labs.append(mod.make_label(fp["id"].hex, lab))
 
-            if not labs:
-                return
-
-            with repo.session() as ses:
-                insert_or_ignore(ses, FingerprintLabel, labs)
-
-        q = query_db("fingerprint", protocol=protocol)
-        mod.with_pbar(handler, q)
-
-    return wrapper
+def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
+    return normalize_data(df, DATA_PREFIX)
 
 def get_record_field(r, field: str, default: Any=None, prefix: str="data_") -> Any:
     v = r.get(prefix+field, default)

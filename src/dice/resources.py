@@ -1,6 +1,6 @@
 from itertools import chain
 from typing import Generator, Optional
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, inspect, select, text
 
 from sqlmodel import Session
 from tqdm import tqdm
@@ -179,9 +179,24 @@ def add_resource(repo: Repository, name: str, source: int, fpath: str, resume: b
             s.commit()
             s.refresh(res)
 
-            sourcerer = new_resourcerer(res.id, resume, bsize)
+            sourcerer = new_resourcerer(res.id, resume, bsize) # type: ignore
+
+        with repo.connect() as con:
+            table_name = f"{name}_records"
+            current_id = 1
+            if inspect(con).has_table(table_name):
+                # --- Step 2: get current max id ---
+                max_id = con.execute(
+                    text(f"SELECT MAX(id) FROM {table_name}")
+                ).scalar()
+                current_id = (max_id or 0) + 1
 
         with repo.connect() as con:
             gen = sourcerer.cast(con)
             for c in tqdm(gen):
-                c.to_sql(f"{name}_records", con, if_exists="append", index=False)
+                n = len(c)
+                c.insert(0, "id", range(current_id, current_id + n))
+                current_id += n
+
+                c.to_sql(table_name, con, if_exists="append", index=False)
+

@@ -17,10 +17,11 @@ def new_label(module_name: str, name: str, short:  Optional[str]= None, descript
         level=level,
     )
 
-def new_fingerprint(module: str, host_id: int, record_id: int, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:
+def new_fingerprint(module: str, host_id: int, record_id: int, resource_id: int, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:
     return Fingerprint(
         host_id=host_id,
         record_id=record_id,
+        resource_id=resource_id,
         module_name=module,
         data=data,
         port=port,

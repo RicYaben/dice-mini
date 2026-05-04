@@ -6,14 +6,14 @@ from sqlmodel import Field, Relationship, SQLModel, Session, Table, UniqueConstr
 
 
 class Model(SQLModel):
-    id: int = Field(default=0, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
 
     def to_dict(self) -> dict:
         return self.model_dump()
 
     @classmethod
     def from_series(cls, row: pd.Series):
-        return cls(**row.to_dict())
+        return cls(**row.to_dict()) # type: ignore
 
     @classmethod
     def from_dataframe(cls, df: pd.DataFrame):
@@ -80,7 +80,7 @@ class Fingerprint(Model, table=True):
     host_id: Optional[int] = Field(default=None, foreign_key="host.id")
     # ID of the record related to
     record_id: Optional[int]
-    source_id: Optional[int] = Field(default=None, foreign_key="source.id")
+    resource_id: Optional[int] = Field(default=None, foreign_key="resource.id")
 
     # data, is a dict
     data: str

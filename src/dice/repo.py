@@ -4,13 +4,14 @@ from sqlalchemy import Connection
 
 from dice.health import HealthMonitor
 from dice.constructors import new_collection
-from dice.config import DEFAULT_BSIZE, DATA_PREFIX
+from dice.config import DEFAULT_BSIZE
 from dice.database import Connector, insert_or_ignore
 
 import pandas as pd
-import ujson
 import warnings
 import logging
+
+from dice.helpers import normalize_data
 
 warnings.simplefilter(action="ignore", category=UserWarning)
 
@@ -20,50 +21,6 @@ type RecordsWrapper = Callable[[Any], pd.DataFrame]
 
 def with_items(*objs) -> pd.DataFrame:
     return new_collection(*objs).to_df()
-
-
-def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
-    # cannot parse
-    if not df.iloc[0].get("data", None):
-        return df
-
-    parsed = df["data"].map(ujson.loads)
-    rdf = pd.json_normalize(parsed.tolist(), max_level=0).add_prefix(prefix)
-    norm = pd.concat(
-        [df.drop(columns=["data"]).reset_index(drop=True), rdf.reset_index(drop=True)],
-        axis=1,
-    )
-    return norm
-
-
-def normalize_zgrab2_records(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
-    parsed = df["data"].apply(ujson.loads)
-
-    # Flatten the 'result' dict
-    rdf = pd.json_normalize(parsed.tolist(), max_level=1)
-    rdf.columns = rdf.columns.str.removeprefix("result.")
-    rdf = rdf.add_prefix(prefix)
-
-    # Concatenate original df (without 'data') and flattened result columns
-    norm = pd.concat(
-        [df.drop(columns=["data"]).reset_index(drop=True), rdf.reset_index(drop=True)],
-        axis=1,
-    )
-
-    return norm
-
-
-def normalize_records(df: pd.DataFrame) -> pd.DataFrame:
-    """each record contains a source_name and an id, that is enough"""
-    match df.iloc[0].get("source_name"):
-        case "zgrab2":
-            return normalize_zgrab2_records(df, DATA_PREFIX)
-        case _:
-            return normalize_data(df, DATA_PREFIX)
-
-
-def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
-    return normalize_data(df, DATA_PREFIX)
 
 
 class Repository:
@@ -129,7 +86,7 @@ class Repository:
                 break
 
     def query_batch(
-        self, q: str, normalize: bool = True, bsize: int = DEFAULT_BSIZE
+        self, q: str, bsize: int = DEFAULT_BSIZE, norm = normalize_data
     ) -> Generator[pd.DataFrame, None, None]:
         """Execute a query in batches. Returns a generator (pandas dataframe)
 
@@ -143,7 +100,7 @@ class Repository:
         """
         with self.connect() as con:
             res = con.execute(text(q)).mappings()
-            norm = normalize_records if normalize else lambda x: x
+            norm = norm if norm else lambda x: x
 
             while rows := res.fetchmany(bsize):
                 yield norm(pd.DataFrame.from_records(rows)) # type: ignore
@@ -157,7 +114,7 @@ class Repository:
             return d
 
     def query(
-        self, q: str, normalize: bool = True, bsize: int = DEFAULT_BSIZE
+        self, q: str, bsize: int = DEFAULT_BSIZE, norm=normalize_data
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
         """A wrapper for the query to return the number of results in the query and the batches
 
@@ -170,7 +127,7 @@ class Repository:
             tuple[int, Generator[pd.DataFrame, None, None]]: number of results, and dataset
         """
         d = self.query_count(q)
-        gen = self.query_batch(q, normalize, bsize)
+        gen = self.query_batch(q, bsize, norm)
         return (d, gen)
 
 def new_repository(connector: Connector) -> Repository:
