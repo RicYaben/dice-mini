@@ -5,7 +5,12 @@ from typing import Generator, Iterable, Optional
 import pandas as pd
 
 from dice.loaders import Loader
-from dice.models import Fingerprint, FingerprintLabel, Host, Model, Label, Fingerprint, Tag, HostTag
+from dice.models import Fingerprint, FingerprintLabel, Host, Model, Label, Fingerprint, Tag, HostTag, Source
+
+def new_source(name: str) -> Source:
+    return Source(
+        name=name,
+    ) 
 
 def new_label(module_name: str, name: str, short:  Optional[str]= None, description:  Optional[str]= None, mitigaton:  Optional[str]= None, level: int=0) -> Label:
     return Label(
@@ -17,9 +22,9 @@ def new_label(module_name: str, name: str, short:  Optional[str]= None, descript
         level=level,
     )
 
-def new_fingerprint(module: str, host_id: int, record_id: int, resource_id: int, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:
+def new_fingerprint(module: str, host: str, record_id: int, resource_id: int, data: str, protocol: Optional[str]= None, port: Optional[int]= None) -> Fingerprint:
     return Fingerprint(
-        host_id=host_id,
+        host=host,
         record_id=record_id,
         resource_id=resource_id,
         module_name=module,

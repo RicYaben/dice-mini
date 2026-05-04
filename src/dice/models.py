@@ -77,7 +77,7 @@ class Host(Model, table=True):
 
 class Fingerprint(Model, table=True):
     # Host (ip)
-    host_id: Optional[int] = Field(default=None, foreign_key="host.id")
+    host: Optional[str] = Field(default=None, foreign_key="host.ip")
     # ID of the record related to
     record_id: Optional[int]
     resource_id: Optional[int] = Field(default=None, foreign_key="resource.id")
@@ -91,7 +91,7 @@ class Fingerprint(Model, table=True):
     port: Optional[int] = None
     protocol: Optional[str] = None
 
-    __table_args__ = (UniqueConstraint("record_id", "host_id", "module_name"),)
+    __table_args__ = (UniqueConstraint("record_id", "host", "module_name"),)
 
 
 class Label(Model, table=True):
@@ -125,7 +125,7 @@ class Tag(Model, table=True):
 
 class HostTag(Model, table=True):
     # Host (ip)
-    host_id: Optional[int] = Field(default=None, foreign_key="host.id")
+    host: Optional[str] = Field(default=None, foreign_key="host.ip")
     # ID of hte Tag
     tag_id: Optional[int] = Field(default=None, foreign_key="tag.id")
     # further details
@@ -135,7 +135,7 @@ class HostTag(Model, table=True):
     protocol: Optional[str] = None
     port: Optional[int] = None
 
-    __table_args__ = (UniqueConstraint("host_id", "tag_id"),)
+    __table_args__ = (UniqueConstraint("host", "tag_id"),)
 
 
 def get_records_table(con: Connection, name: str, suffix: Optional[str] = "", sep: Optional[str] ="_") -> Table:

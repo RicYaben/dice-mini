@@ -5,13 +5,7 @@ from typing import Any, Callable, Generator, Iterable
 import ujson
 
 from dice.config import DATA_PREFIX
-from dice.models import Source
 from dice.loaders import Loader
-
-def new_source(name: str) -> Source:
-    return Source(
-        name=name,
-    ) 
 
 def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
     # cannot parse

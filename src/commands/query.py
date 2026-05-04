@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import text
+from sqlalchemy import text, MetaData
 from typing_extensions import Annotated
 
 from dice.start import load_repository
@@ -12,12 +12,38 @@ import pandas as pd
 
 query_app = typer.Typer(help="Query the database")
 
+def normalize_services(services):
+    if not services:
+        return []
+
+    # SQLite often returns stringified JSON
+    if isinstance(services, str):
+        try:
+            services = ujson.loads(services)
+        except Exception:
+            return []
+
+    # single object → list
+    if isinstance(services, dict):
+        services = [services]
+
+    # final safe transform
+    out = []
+    for s in services:
+        if not isinstance(s, dict):
+            continue
+        s = dict(s)
+        if "data" in s and isinstance(s["data"], str):
+            try:
+                s["data"] = ujson.loads(s["data"])
+            except Exception:
+                pass
+        out.append(s)
+
+    return out
+
 @query_app.command()
 def query(
-    hosts: str = typer.Argument(
-        "0.0.0.0/0",
-        help="list of hosts or ranges to query for"
-    ),
     q: str = typer.Option(
         "",
         "-q",
@@ -30,11 +56,9 @@ def query(
     ), 
     fields: Annotated[str, typer.Option()] = "hosts,ports,services,labels,tags", 
     exclude: Annotated[str, typer.Option()] = "",
-    delimeter: Annotated[str, typer.Option()] = ","
 ) -> None:
-    hlist = hosts.split(delimeter)
     parser = make_parser()
-    qt = parser.to_sql(hlist, q)
+    qt = parser.to_sql(q)
 
     repo = load_repository(db=database)
     n, batches = repo.query(qt)
@@ -46,17 +70,18 @@ def query(
 
     with repo.connect() as con:
         info_b = new_info(flist)
+        meta = MetaData()
+        meta.reflect(bind=con)
+
         for b in batches:
             ips = b.ip.tolist()
-            iq = info_b.make(ips)
+            iq = info_b.make(ips, meta.tables)
 
-            # TODO: this has changed dramatically
-            rows = con.execute(text(iq)).mappings().fetchall()
-            df = pd.DataFrame.from_records(rows) # type: ignore
-            df['services'] = df['services'].apply(
-                lambda services: [
-                    {**s, 'data': ujson.loads(s['data'])} for s in services
-                ]
-            )
+            rows = con.execute(iq).mappings().all()
+            df = pd.DataFrame(rows)
+            
+            if "services" in df.columns:
+                df["services"] = df["services"].apply(normalize_services)
+
             print(df.to_json(orient="records", lines=True, force_ascii=False))
 

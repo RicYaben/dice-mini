@@ -1,15 +1,19 @@
 from difflib import ndiff
+from sqlalchemy import text
 from tqdm import tqdm
 
 from dice.ast import make_parser
-from dice.helpers import new_source
+from dice.helpers import with_records
 from dice.info import new_info
 from dice.models import Source
 from dice.repo import Repository
+from dice.constructors import new_source
 
 import pandas as pd
 import numpy as np
 import ujson
+
+from dice.resources import new_resourcerer
 
 def diff_ports(left, right):
     if not isinstance(left, (np.ndarray)): 
@@ -165,27 +169,27 @@ def dump(df, path):
             f.write("\n")
 
 
-def compare(repo: Repository, query: str, dst: str, fields: list[str], output: str="comparison.jsonl") -> Source:
+def compare(repo: Repository, query: str, dst: str, fields: list[str], output: str="comparison.jsonl") -> None:
     parser = make_parser()
     q = parser.to_sql(query)
 
-    t, batches = repo.query_batch_n(q)
+    t, gen = repo.query(q)
 
-    con = repo.connect()
-    info_b = new_info(fields)
+    with repo.connect() as con:
+        con.execute(text(f"ATTACH DATABASE '{dst}' AS dst"))
+        info_b = new_info(fields)
 
-    with tqdm(total=t, desc="compare") as pbar:
-        for b in batches:
-            ips = b.ip.tolist()
+        with tqdm(total=t, desc="compare") as pbar:
+            for df in gen:
+                ips = df.ip.tolist()
 
-            srcdf = con.execute(info_b.make(ips)).df()
-            dstdf = con.execute(info_b.make(ips, dst)).df()
+                src_q = info_b.make(ips)
+                dst_q = info_b.make(ips, "dst")
+                
+                src_df = pd.read_sql(src_q, con)
+                dst_df = pd.read_sql(dst_q, con)
 
-            difs = differences(srcdf, dstdf)
-            dump(difs, output)
-            # some way to save this
+                difs = differences(src_df, dst_df)
+                dump(difs, output)
 
-            pbar.update(len(ips))
-
-    source = new_source("comparison", output, "-")
-    return source
+                pbar.update(len(ips))

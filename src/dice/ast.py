@@ -139,6 +139,7 @@ class QueryTransformer(Transformer):
 TABLE_MAP = {
     "port": "fingerprint",
     "service": "fingerprint",
+    "protocol": "fingerprint",
     "tag": "tags",
     "label": "labels",
 }
@@ -157,26 +158,18 @@ class SQLBuilder:
     def __init__(self):
         self.joins = OrderedDict()
 
-    def build(self, hlist: list[str], ast):
+    def build(self, ast):
         "Returns a query for hosts"
 
-        sql = ["SELECT DISTINCT(hosts.ip) FROM hosts AS hosts"]
+        sql = ["SELECT DISTINCT(host.ip) FROM host AS host"]
         where = []
 
         # ---------- IP ----------
         ip_clauses = []
-        for entry in hlist:
-            if "/" in entry:
-                ip_clauses.append(
-                    f"ip_within_cidr(hosts.ip, '{entry}')"
-                )
-            else:
-                ip_clauses.append(
-                    f"hosts.ip = '{entry}'"
-                )
 
         # group OR conditions
-        where.append("(" + " OR ".join(ip_clauses) + ")")
+        if ip_clauses:
+            where.append("(" + " OR ".join(ip_clauses) + ")")
 
         # ---------- Filters ----------
         filters = ast.get("filters")
@@ -193,7 +186,7 @@ class SQLBuilder:
         if where:
             sql.append("WHERE " + " AND ".join(where))
 
-        return "\n".join(sql)
+        return " ".join(sql)
 
     # ---------- Visitor ----------
     def visit(self, node):
@@ -254,8 +247,9 @@ class SQLBuilder:
             if field == prefix or field.startswith(prefix + "."):
                 table = tbl
                 break
+
         if table is None:
-            table = "hosts"
+            table = "host"
 
         if field in FIELD_MAP:
             column = FIELD_MAP[field]
@@ -266,28 +260,30 @@ class SQLBuilder:
 
     # ---------- JOINs ----------
     def ensure_join(self, table):
-        if table == "hosts":
+        if table == "host":
             return
 
         if table == "fingerprint":
-            self.join("LEFT JOIN fingerprint ON fingerprint.host = hosts.ip")
-        elif table == "tags":
+            self.join("LEFT JOIN fingerprint ON fingerprint.host = host.ip")
+
+        elif table == "tag":
             # join through host_tags
-            self.join("LEFT JOIN host_tags ON host_tags.host = hosts.ip")
-            self.join("LEFT JOIN tags ON tags.id = host_tags.tag_id")
-        elif table == "labels":
+            self.join("LEFT JOIN host_tags ON hosttag.host = host.ip")
+            self.join("LEFT JOIN tags ON tags.id = hosttag.tag_id")
+
+        elif table == "label":
             self.ensure_join("fingerprint")
             # join through host_labels
             self.join(
-                "LEFT JOIN fingerprint_labels ON fingerprint_labels.fingerprint_id = fingerprint.id"
+                "LEFT JOIN fingerprintlabel ON fingerprintlabel.fingerprint_id = fingerprint.id"
             )
-            self.join("LEFT JOIN labels ON labels.id = fingerprint_labels.label_id")
+            self.join("LEFT JOIN label ON labels.id = fingerprintlabel.label_id")
 
     def join(self, j: str):
         self.joins[j] = None
 
 
-def parse_query(hlist: list[str], query: str):
+def parse_query(query: str):
     if not query or not query.strip():
         raise ValueError("empty query")
 
@@ -295,7 +291,7 @@ def parse_query(hlist: list[str], query: str):
     tree = parser.parse(query)
     print(tree.pretty())
     ast = QueryTransformer().transform(tree)
-    q = SQLBuilder().build(hlist, ast)
+    q = SQLBuilder().build(ast)
     return q
 
 # TODO: remove the IP field, we dont need it
@@ -347,9 +343,9 @@ class Parser:
         exp = self.transformer.transform(tree)
         return exp
 
-    def to_sql(self, hlist: list[str], q: str):
+    def to_sql(self, q: str):
         ast = self.parse(q)
-        return self.builder.build(hlist, ast)
+        return self.builder.build(ast)
 
 
 def new_transformer():
