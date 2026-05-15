@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy import inspect
 from tqdm import tqdm
-from sqlmodel import exists, select, text
+from sqlmodel import Session, exists, select, text
 from typing import Optional
 
 from dice.constructors import new_host
@@ -24,7 +24,6 @@ def find_host_col(repo: Repository, table: str) -> str | None:
         common = guesswork & cols
         return next(iter(common), None)
 
-
 def add_hosts_from_records_table(
     repo: Repository, name: str, col: Optional[str] = "ip"
 ) -> None:
@@ -38,14 +37,14 @@ def add_hosts_from_records_table(
     with repo.connect() as con:
         tab = get_records_table(con, name)
         c = getattr(tab.c, col)
-    
+
         stmt = select(
             c.distinct().label("ip")
         ).where(
             ~exists().where(c == Host.ip)
         ).compile(con)
 
-        n, gen = repo.query(str(stmt), norm=None)
+        n, gen = repo.query(str(stmt), bsize=5)
         if not n:
             logger.debug(f"no missing hosts from {name}")
             return
@@ -54,9 +53,17 @@ def add_hosts_from_records_table(
             pbar.write("inserting missing hosts")
             for b in gen:
                 hosts = [new_host(ip=str(r.ip)) for r in b.itertuples()]
-                repo.insert(hosts, con=con)
+
+                #repo.insert(hosts, con=con)
+                with Session(con) as s:
+                    s.add_all(hosts)
+                    s.commit()
+                    s.flush()
+
                 pbar.update(len(b))
 
+                print("exiting, debug! remember to fix this :D (middlewares)")
+                break
 
 def add_missing_hosts(repo: Repository) -> HealthCheck:
     def hc(e: Event):

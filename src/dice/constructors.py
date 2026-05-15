@@ -80,3 +80,7 @@ def with_model(models: Iterable[Model], chunk_size: int= 5_000) -> Loader:
         if batch:
             yield pd.DataFrame(batch)
     return load
+
+
+def with_items(*items: Model) -> pd.DataFrame:
+    return new_collection(*items).to_df()

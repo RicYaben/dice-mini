@@ -3,12 +3,7 @@ from tabulate import tabulate
 
 import logging
 
-from dice.config import (
-    CLASSIFIER,
-    FINGERPRINTER,
-    SCANNER,
-    TAGGER,
-)
+from dice.config import ModuleEnum
 from dice.repo import Repository
 from dice.components import Component
 
@@ -32,7 +27,7 @@ class Engine:
             c.init(repo)
 
         logger.info("shaking vigorously")
-        for m in [SCANNER, FINGERPRINTER, CLASSIFIER, TAGGER]:
+        for m in ModuleEnum:
             if comps := list(filter(fcomp(m), self.components)):
                 logger.info(f"rolling {m.name}(s)")
                 for c in comps:

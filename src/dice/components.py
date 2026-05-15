@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from tabulate import tabulate
 
-from dice.config import CLASSIFIER, FINGERPRINTER, MFACTORY, MType
+from dice.config import MFACTORY, ModuleType, ModuleEnum
 from dice.repo import Repository
 from dice.signatures import Signature, new_signature
 from dice.modules import Module, ModuleHandler, ModuleInit, defaultModuleInit, new_module, ModuleRegistry
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Component:
     # type of component: classifier, fingerprinter, scanner...
-    c_type: MType
+    c_type: ModuleType
     # name of the component
     name: str
     # list of signatures registered
@@ -34,24 +34,24 @@ class Component:
         return self
 
 
-def new_component(t: MType, name: str, *signatures: Signature) -> Component:
+def new_component(t: ModuleType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
 
 def new_fingerprinter(
     handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "fp"
 ) -> Component:
-    return make_component(FINGERPRINTER, preffix, handler, init)
+    return make_component(ModuleEnum.FINGERPRINTER.value, preffix, handler, init)
 
 
 def new_classifier(
     handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "cls"
 ) -> Component:
-    return make_component(CLASSIFIER, preffix, handler, init)
+    return make_component(ModuleEnum.CLASSIFIER.value, preffix, handler, init)
 
 @dataclass
 class ComponentFactory:
     # type of component, signatures, and modules
-    t: MType
+    t: ModuleType
     name: str
 
     def make_signature(self, name: str, *module: Module) -> Signature:
@@ -66,12 +66,12 @@ class ComponentFactory:
         return new_component(self.t, self.name, *signature)
 
 
-def new_component_factory(t: MType, name: str) -> ComponentFactory:
+def new_component_factory(t: ModuleType, name: str) -> ComponentFactory:
     return ComponentFactory(t, name)
 
 
 def make_component(
-    t: MType, preffix: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
+    t: ModuleType, preffix: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
 ) -> Component:
     fact = new_component_factory(t, "-".join([preffix, "comp"]))
     return fact.make_component(
@@ -132,7 +132,7 @@ class ComponentManager:
         return result
 
     def get_modules(
-        self, t: MType | None = None, modules: list[str] = ["*"]
+        self, t: ModuleType | None = None, modules: list[str] = ["*"]
     ) -> list[Module]:
         found = self.find(modules)
         found = [m for _, m in found if m.m_type == t]
@@ -142,7 +142,7 @@ class ComponentManager:
         return list(uniq.values())
 
     def build(
-        self, types: list[MType] = MFACTORY.all(), modules: list[str] = ["*"]
+        self, types: list[ModuleType] = MFACTORY.all(), modules: list[str] = ["*"]
     ) -> list[Component]:
         comps = []
         for t in types:

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from collections import OrderedDict
+from enum import Enum
 
 import logging
 logger = logging.getLogger(__name__)
@@ -12,7 +13,7 @@ DEFAULT_MODULES_DIR: str = "modules"
 DEFAULT_BSIZE: int = 50_000
 
 @dataclass(frozen=True)
-class MType:
+class ModuleType:
     command: str
     name: str
     alias: str
@@ -24,23 +25,23 @@ class MType:
         return self.name
 
 
-class MFactory:
+class ModuleFactory:
     def __init__(self):
-        self._lookup: OrderedDict[str, MType] = OrderedDict()
+        self._lookup: OrderedDict[str, ModuleType] = OrderedDict()
 
-    def register(self, mt: MType):
+    def register(self, mt: ModuleType):
         # Map each of the three identifiers to the same MType
         for key in (mt.command, mt.name, mt.alias):
             if key:  # allows alias=None
                 self._lookup[key] = mt
 
-    def get(self, key: str) -> MType:
+    def get(self, key: str) -> ModuleType:
         try:
             return self._lookup[key]
         except KeyError:
             raise KeyError(f"No module type found for key: {key!r}")
 
-    def all(self) -> list[MType]:
+    def all(self) -> list[ModuleType]:
         # dedupe by .command
         ret = []
         for v in self._lookup.values():
@@ -50,14 +51,16 @@ class MFactory:
 
 # ---- Define your module types ----
 
-SCANNER = MType(command="scan", name="scanner", alias="s")
-CLASSIFIER = MType(command="classify", name="classifier", alias="c")
-FINGERPRINTER = MType(command="fingerprint", name="fingerprinter", alias="f")
-TAGGER = MType(command="tag", name="tag", alias="t")
+class ModuleEnum(Enum):
+    SCANNER = ModuleType(command="scan", name="scanner", alias="s")
+    CLASSIFIER = ModuleType(command="classify", name="classifier", alias="c")
+    FINGERPRINTER = ModuleType(command="fingerprint", name="fingerprinter", alias="f")
+    TAGGER = ModuleType(command="tag", name="tag", alias="t")
+
 
 # ---- Build factory with registry ----
 
-MFACTORY = MFactory()
-for m in [SCANNER, FINGERPRINTER, CLASSIFIER, TAGGER]:
-    MFACTORY.register(m)
+MFACTORY = ModuleFactory()
+for m in ModuleEnum:
+    MFACTORY.register(m.value)
 

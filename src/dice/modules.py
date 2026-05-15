@@ -13,7 +13,7 @@ import logging
 
 from dice.config import (
     DEFAULT_BSIZE,
-    MType,
+    ModuleType,
 )
 
 from dice.database import insert_or_ignore
@@ -40,7 +40,7 @@ type RecordHandler = Callable[[Any], Generator[Any, None, None]]
 @dataclass
 class Module:
     # type of module, classifier, fingerprinter, scanner...
-    m_type: MType
+    m_type: ModuleType
     # name of the module
     name: str
 
@@ -221,7 +221,7 @@ def defaultModuleInit(_) -> None:
 
 
 def new_module(
-    t: MType, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
+    t: ModuleType, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
 ) -> Module:
     return Module(t, name, init, handler)
 

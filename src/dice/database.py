@@ -37,10 +37,13 @@ def insert_or_ignore(
 
     table = model.__table__
     cols = [c.name for c in table.columns]
-
-    # ORM objects → dict rows
+    pk_cols = {c.name for c in table.primary_key.columns}
     rows = [
-        {c: getattr(item, c) for c in cols}
+        {
+            c: getattr(item, c)
+            for c in cols
+            if not (c in pk_cols and getattr(item, c) is None)
+        }
         for item in items
     ]
 
