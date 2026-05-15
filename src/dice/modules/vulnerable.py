@@ -2,8 +2,8 @@ import pandas as pd
 
 from dataclasses import dataclass
 
-from dice.config import CLASSIFIER
-from dice.module import Module, new_module
+from dice.config import ModuleEnum
+from dice.modules import Module, new_module
 from dice.query import query_db
 from dice.records import Access, Authentication, Connection, Maturity, Record, make_record
 
@@ -155,4 +155,4 @@ def vulnerable_cls_handler(mod: Module) -> None:
     mod.itemize(q, handler, orient="rows")
 
 def make_classifier() -> Module:
-    return new_module(CLASSIFIER, "vulnerable", vulnerable_cls_handler, vuln_cls_init)
+    return new_module(ModuleEnum.CLASSIFIER.value, "vulnerable", vulnerable_cls_handler, vuln_cls_init)

@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives import serialization
 
 import pandas as pd
 
-from dice.engine import Module
+from dice.modules import Module
 from dice.query import query_db
 
 def certs_cls_init(mod: Module) -> None:

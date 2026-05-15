@@ -1,8 +1,8 @@
-from dataclasses import dataclass
 import ipaddress
-from typing import Generator, Iterable, Optional
-
 import pandas as pd
+
+from dataclasses import dataclass
+from typing import Generator, Iterable, Optional
 
 from dice.loaders import Loader
 from dice.models import Fingerprint, FingerprintLabel, Host, Model, Label, Fingerprint, Tag, HostTag, Source
