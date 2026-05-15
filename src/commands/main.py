@@ -1,6 +1,6 @@
 import typer
 
-from commands.query import query_app
+from commands.search import search_app
 from commands.run import run_app
 from commands.source import source_app
 from commands.modules import modules_app
@@ -8,7 +8,7 @@ from commands.compare import compare_app
 from commands.health import health_app
 
 app = typer.Typer(help="dice-mini CLI")
-app.add_typer(query_app)
+app.add_typer(search_app)
 app.add_typer(run_app)
 app.add_typer(source_app, name="source")
 app.add_typer(modules_app, name="modules")

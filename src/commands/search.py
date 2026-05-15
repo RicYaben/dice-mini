@@ -10,7 +10,7 @@ import ujson
 import typer
 import pandas as pd
 
-query_app = typer.Typer(help="Query the database")
+search_app = typer.Typer(help="Query the database")
 
 def normalize_services(services):
     if not services:
@@ -42,8 +42,8 @@ def normalize_services(services):
 
     return out
 
-@query_app.command()
-def query(
+@search_app.command()
+def search(
     q: str = typer.Option(
         "",
         "-q",
