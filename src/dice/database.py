@@ -1,65 +1,55 @@
 from sqlite3 import IntegrityError
-from typing import Iterable, Literal, Optional, Type
-from sqlalchemy import Connection, Engine
+from typing import Iterable, Literal, Optional, Sequence, Type
+from sqlalchemy import Connection, Engine, Row
+from sqlmodel import SQLModel, Session, select, insert, create_engine
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlmodel import SQLModel, Session, UniqueConstraint, select, insert, create_engine
 
-def insert_records(session: Session, model: Type, records: Iterable[dict]):
+from dice.models import Model
+
+def insert_records(session: Session, model: Type[Model], records: list[dict]) -> Sequence[Row]:
     """
     Quickest way to blindly insert thousands of records into a database.
     Mainly used by the sourcerer to insert actual records.
     https://github.com/fastapi/sqlmodel/discussions/659
     """
-    session.exec(insert(model), params=records) # type: ignore
+    if not records:
+        return []
+    
+    result = session.exec(insert(model), params=records).all()
+    if result is None:
+        return []
+    
     session.commit()
-
-def _get_unique_columns(model) -> list[str]:
-    table = model.__table__
-
-    # Prefer composite unique constraints
-    for c in table.constraints:
-        if isinstance(c, UniqueConstraint):
-            return [col.name for col in c.columns]
-
-    # Fallback to column-level unique=True
-    cols = [c.name for c in table.columns if c.unique]
-    return cols
+    return result
 
 
 def insert_or_ignore(
     session: Session,
-    model: Type,
-    items: Iterable,
-) -> None:
+    model: Type[Model],
+    items: Iterable[Model],
+) -> Sequence[Row]:
     items = list(items)
     if not items:
-        return
+        return []
 
-    table = model.__table__
-    cols = [c.name for c in table.columns]
-    pk_cols = {c.name for c in table.primary_key.columns}
-    rows = [
-        {
-            c: getattr(item, c)
-            for c in cols
-            if not (c in pk_cols and getattr(item, c) is None)
-        }
+    rows_data = [
+        item.model_dump(exclude_unset=True)
         for item in items
     ]
 
-    stmt = sqlite_insert(table).values(rows)
-
-    unique_cols = _get_unique_columns(model)
-    conflict_cols = (
-        unique_cols if isinstance(unique_cols, list) else [unique_cols]
+    stmt = (
+        sqlite_insert(model)
+        .values(rows_data)
+        .prefix_with("OR IGNORE")
+        .returning(model)
     )
 
-    stmt = stmt.on_conflict_do_nothing(
-        index_elements=conflict_cols
-    )
-
-    session.exec(stmt)
+    result = session.exec(stmt).all()
+    if result is None:
+        return []
+    
     session.commit()
+    return result
 
 def get_or_create(session: Session, model, **kwargs):
     # Try to get existing
@@ -79,7 +69,6 @@ def get_or_create(session: Session, model, **kwargs):
         # Another process created it first
         obj = session.exec(select(model).filter_by(**kwargs)).one()
         return obj, False
-
 
 class Connector:
     def __init__(

@@ -1,15 +1,14 @@
-from typing import Any, Generator, Callable
-from sqlmodel import Session, text
-from sqlalchemy import Connection
-
-from dice.health import HealthMonitor
-from dice.config import DEFAULT_BSIZE
-from dice.database import Connector, insert_or_ignore
-
 import pandas as pd
 import warnings
 import logging
 
+from typing import Any, Generator, Callable, Sequence
+from sqlmodel import Session, text
+from sqlalchemy import Connection, Row
+
+from dice.health import HealthMonitor
+from dice.config import DEFAULT_BSIZE
+from dice.database import Connector, insert_or_ignore
 from dice.helpers import normalize_data
 
 warnings.simplefilter(action="ignore", category=UserWarning)
@@ -51,8 +50,8 @@ class Repository:
     def simple_query(
         self, q: str, bsize: int = DEFAULT_BSIZE
     ) -> Generator[dict, None, None]:
-        with self.connect() as con:
-            res = con.execute(text(q))
+        with self.connect() as c:
+            res = c.execute(text(q))
             cols = [c[0] for c in res.cursor.description]  # type: ignore
 
             while True:
@@ -62,30 +61,38 @@ class Repository:
                     continue
                 break
 
+    def stream(self, q: str) -> Generator[dict]:
+        for batch in self.simple_query(q):
+            for record in batch:
+                yield record
+
     def query_batch(
         self, q: str, bsize: int = DEFAULT_BSIZE, norm = normalize_data
     ) -> Generator[pd.DataFrame, None, None]:
         with self.connect() as con:
-            res = con.execute(text(q)).mappings()
             norm = norm if norm else lambda x: x
-
-            while rows := res.fetchmany(bsize):
+            while rows := query_batch(q, con, bsize):
                 yield norm(pd.DataFrame.from_records(rows)) # type: ignore
-
-    def query_count(self, q: str) -> int:
-        dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
-        with self.connect() as con:
-            d = (
-                res[0] if (res := con.execute(text(dq)).fetchone()) else 0
-            )
-            return d
 
     def query(
         self, q: str, bsize: int = DEFAULT_BSIZE, norm=normalize_data
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
-        d = self.query_count(q)
+        with self.connect() as con:
+            d = query_count(q, con)
         gen = self.query_batch(q, bsize, norm)
         return (d, gen)
+    
+def query_batch(q: str, con: Connection, bsize: int = DEFAULT_BSIZE) -> Generator[Sequence, None, None]:
+    res = con.execute(text(q)).mappings()
+    while rows := res.fetchmany(bsize):
+        yield rows
+
+def query_count(q: str, con: Connection) -> int:
+    dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
+    d = (
+        res[0] if (res := con.execute(text(dq)).fetchone()) else 0
+    )
+    return d
 
 def new_repository(connector: Connector) -> Repository:
     return Repository(

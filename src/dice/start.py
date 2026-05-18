@@ -1,4 +1,3 @@
-
 from sqlalchemy import select
 
 from dice.middlewares import add_missing_hosts

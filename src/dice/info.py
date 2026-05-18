@@ -1,4 +1,4 @@
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.sql import Select
 
 class InfoQueryBuilder:

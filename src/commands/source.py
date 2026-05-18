@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import typer
 
 from dice.database import get_or_create
@@ -14,7 +16,9 @@ def add(
     name: str = typer.Argument(
         help="Name of the source, e.g., zgrab2, zmap, etc."
     ),
-    fpath: str = typer.Argument(
+    fpath: str | None = typer.Option(
+        None,
+        "--fpath",
         help="Source filepath"
     ),
     database: str | None = typer.Option(
@@ -34,6 +38,11 @@ def add(
     repo = load_repository(db=database)
     with repo.session() as s:
         src, _ = get_or_create(s, Source, name=name)
+
+    if not fpath:
+        fpath = name
+        if not Path(name).is_dir():
+            fpath += ".*"
 
     for p in walk(fpath):
         add_resource(repo, name, src.id, str(p), resume=resume, bsize=batch) # type: ignore

@@ -1,8 +1,7 @@
+import ujson
 import pandas as pd
 
 from typing import Any, Callable, Generator, Iterable
-
-import ujson
 
 from dice.config import DATA_PREFIX
 from dice.loaders import Loader
@@ -39,9 +38,6 @@ def normalize_zgrab2_records(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame
 
 
 def get_normalizer(src: str) -> Callable[[pd.DataFrame], pd.DataFrame]:
-    """each record contains a source_name and an id, that is enough"""
-    
-
     match src:
         case "zgrab2":
             def ret(df: pd.DataFrame):
@@ -82,4 +78,3 @@ def with_records(records: Iterable[dict], chunk_size: int = 5_000) -> Loader:
         if batch:
             yield pd.DataFrame(batch)
     return load
-

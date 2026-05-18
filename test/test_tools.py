@@ -1,26 +1,37 @@
 import os
-import tempfile
-from typing import Callable
+from tempfile import TemporaryDirectory
+from sqlmodel import Session
 
-from dice import repo, helpers, models
+from dice.database import get_or_create
+from dice.loaders import walk
+from dice.models import Source
+from dice.repo import Repository
+from dice.start import load_repository
 
-def make_test_sources() -> tuple[list[models.Source], Callable]:
-    tmpdir = tempfile.TemporaryDirectory()
-    fpath = os.path.join(tmpdir.name, "results.jsonl")
+def make_test_zgrab2_source(s: Session, dir: str) -> tuple[Source, str]:
+    fpath = os.path.join(dir, "results.jsonl")
     with open(fpath, "w", encoding="utf-8") as f:
         f.write(
-            '{"ip":"2.2.2.2","port":4242,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'+
-            '{"ip":"1.1.1.1","port":4242,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'
+            '{"ip":"2.2.2.2","port":0,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'+
+            '{"ip":"1.1.1.1","port":0,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'
         )
-    
-    # takes a name of the source and a path to a file
-    src = helpers.new_source("zgrab2", fpath, "-")
-    return ([src], tmpdir.cleanup)
 
-def load_test_repository() -> repo.Repository:
-        srcs, clean = make_test_sources()
+    src, _ = get_or_create(s, Source, name="zgrab2")
+    return (src, fpath)
+
+def load_test_repository() -> Repository:
+        dir = TemporaryDirectory()
         try:
-            r = repo.load_repository(srcs)
-            return r
+            repo = load_repository()
+            with repo.session() as s:
+                fpath, fpath = make_test_zgrab2_source(s, dir.name)
+
+            for p in walk(fpath):
+                add_resource(repo, src.name, src.id, str(p), resume=false, bsize=batch) # type: ignore
+            return repo
         finally:
-            clean()
+            dir.cleanup()
+
+def summary(repo: Repository) -> dict:
+    with repo.connect() as con:
+         return {}

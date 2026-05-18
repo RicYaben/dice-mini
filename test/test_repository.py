@@ -1,46 +1,43 @@
 import unittest
 import json
+import pandas as pd
 
-from test import test_tools
-from dice.helpers import new_label, new_fingerprint, new_fp_label
+from dice.query import query_db
+from test.test_tools import load_test_repository, summary
+from dice.constructors import new_label, new_fingerprint, new_fp_label
 
 class TestRepository(unittest.TestCase):
 
     def test_add_records(self):
-        repo = test_tools.load_test_repository()
-        result = repo.get_records("2.2.2.2", "1.1.1.1")
-        self.assertEqual(len(result.index), 2)
+        repo = load_test_repository()
+        n = repo.query_count(query_db("host", ip_in= ["1.1.1.1", "2.2.2.2"]))
+        self.assertEqual(n, 2)
 
     def test_fingerprint_and_label(self):
-        repo = test_tools.load_test_repository()
+        repo = load_test_repository()
         targets = ("2.2.2.2", "1.1.1.1")
 
         # add the labels to the database
         lab = new_label("test", "test-label")
-        repo.add_labels(lab)
-
-        # get some records to fingerprint
-        records = repo.get_records(*targets)
+        repo.insert([lab])
+        assert(lab.id != None)
 
         # dummy fingerprint
         fps = []
-        for _, record in records.iterrows():
-            data = {"port": record["port"]}
-            fp = new_fingerprint("test", record["ip"], record["id"], json.dumps(data))
-            fps.append(fp)
+        for r in repo.stream(query_db("host", ip_in=targets)):
+                data = {"port": r["port"]}
+                fp = new_fingerprint("test", resource_id=r["resource_id"], record_id=r["id"], host=r["ip"], data=json.dumps(data))
+                fps.append(fp)
 
-        repo.fingerprint(*fps)
-
-        # get the same fingerprints
-        fingerprints = repo.get_fingerprints(*targets)
+        repo.insert(*fps)
 
         # label fingerprints
         fp_labs = []
-        for _, fp in fingerprints.iterrows():
+        for _, fp in repo.stream(query_db("fingerprint", ip_in=targets)):
             fp_labs.append(new_fp_label(fp["id"], lab.id))
 
-        repo.label(*fp_labs)
+        repo.insert(*fp_labs)
 
         # evaluate
-        summary = repo.summary()
+        summary = summary(repo)
         self.assertEqual(summary, {"fingerprinted": 2, "labelled": 2})
