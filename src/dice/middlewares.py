@@ -34,7 +34,6 @@ def add_hosts_from_records_table(
         logger.debug(f"fialed to find a host column in {name}")
         return
 
-    # NOTE: we don't have a model for random records, so we have to deal with this
     with repo.connect() as con:
         tab = get_records_table(con, name)
         c = getattr(tab.c, col)
@@ -44,8 +43,8 @@ def add_hosts_from_records_table(
         ).where(
             ~exists().where(c == Host.ip)
         ).compile(con))
+        
         n = query_count(q, con)
-
         if not n:
             logger.debug(f"no missing hosts from {name}")
             return
@@ -54,7 +53,7 @@ def add_hosts_from_records_table(
         pbar.write("inserting missing hosts")
 
         with repo.session() as ses:
-            for b in query_batch(q, ses.connection(), 5):
+            for b in query_batch(q, ses.connection()):
                 hosts = [new_host(ip=str(r.ip)) for r in b]
                 inserted = insert_or_ignore(ses, Host, hosts)
                 pbar.update(len(b))
