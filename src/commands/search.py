@@ -1,4 +1,3 @@
-from copy import copy
 from typing import Optional
 from sqlalchemy import MetaData
 from typing_extensions import Annotated
@@ -45,10 +44,9 @@ def normalize_services(services):
     return out
 
 def normalize(df: pd.DataFrame) -> pd.DataFrame:
-    cp = copy(df)
-    if "services" in cp.columns:
-        cp["services"] = cp["services"].apply(normalize_services)
-    return cp
+    if "services" in df.columns:
+        df["services"] = df["services"].apply(normalize_services)
+    return df
 
 def anonymize_col(df: pd.DataFrame, col: str):
     mapping = {
@@ -70,15 +68,15 @@ def search(
         "-db",
         "--database",
     ), 
-    anonymize: Annotated[str, typer.Option()] = "",
-    remove: Annotated[str, typer.Option()] = "",
-    fields: Annotated[str, typer.Option()] = "hosts,ports,services,labels,tags", 
-    exclude: Annotated[str, typer.Option()] = "",
     limit: Optional[int] = typer.Option(
         None,
         "-l",
         "--limit"
-    )
+    ),
+    anonymize: Annotated[str, typer.Option()] = "",
+    remove: Annotated[str, typer.Option()] = "",
+    fields: Annotated[str, typer.Option()] = "hosts,ports,services,labels,tags", 
+    exclude: Annotated[str, typer.Option()] = "",
 ) -> None:
     parser = make_parser()
     qt = parser.to_sql(q)
