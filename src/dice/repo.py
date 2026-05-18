@@ -2,7 +2,7 @@ import pandas as pd
 import warnings
 import logging
 
-from typing import Any, Generator, Callable, Sequence
+from typing import Any, Generator, Callable, Optional, Sequence
 from sqlmodel import Session, text
 from sqlalchemy import Connection, Row
 
@@ -67,28 +67,42 @@ class Repository:
                 yield record
 
     def query_batch(
-        self, q: str, bsize: int = DEFAULT_BSIZE, norm = normalize_data
+        self, q: str, bsize: int = DEFAULT_BSIZE, norm = normalize_data, limit: Optional[int] = None
     ) -> Generator[pd.DataFrame, None, None]:
         with self.connect() as con:
             norm = norm if norm else lambda x: x
-            for batch in query_batch(q, con, bsize):
+            for batch in query_batch(q, con, bsize, limit):
                 df = pd.DataFrame.from_records(batch)
                 yield norm(df)
 
     def query(
-        self, q: str, bsize: int = DEFAULT_BSIZE, norm=normalize_data
+        self, q: str, bsize: int = DEFAULT_BSIZE, norm=normalize_data, limit: Optional[int] = None 
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
         with self.connect() as con:
-            d = query_count(q, con)
-        gen = self.query_batch(q, bsize, norm)
+            d = query_count(q, con, limit)
+        gen = self.query_batch(q, bsize, norm, limit)
         return (d, gen)
     
-def query_batch(q: str, con: Connection, bsize: int = DEFAULT_BSIZE) -> Generator[Sequence, None, None]:
+def query_batch(q: str, con: Connection, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None) -> Generator[Sequence, None, None]:
+    if limit is not None:
+        q = f"""
+        SELECT *
+        FROM ({q}) AS subq
+        LIMIT {int(limit)}
+        """
+        
     res = con.execute(text(q)).mappings()
     while rows := res.fetchmany(bsize):
         yield rows
 
-def query_count(q: str, con: Connection) -> int:
+def query_count(q: str, con: Connection, limit: Optional[int] = None) -> int:
+    if limit is not None:
+        q = f"""
+        SELECT *
+        FROM ({q}) AS subq
+        LIMIT {int(limit)}
+        """
+
     dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
     d = (
         res[0] if (res := con.execute(text(dq)).fetchone()) else 0

@@ -74,12 +74,17 @@ def search(
     remove: Annotated[str, typer.Option()] = "",
     fields: Annotated[str, typer.Option()] = "hosts,ports,services,labels,tags", 
     exclude: Annotated[str, typer.Option()] = "",
+    limit: Optional[int] = typer.Option(
+        None,
+        "-l",
+        "--limit"
+    )
 ) -> None:
     parser = make_parser()
     qt = parser.to_sql(q)
 
     repo = load_repository(db=database)
-    n, batches = repo.query(qt)
+    n, batches = repo.query(qt, limit=limit)
     
     print(f"found {n} hosts")
     if not n:
