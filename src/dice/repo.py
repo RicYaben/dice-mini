@@ -71,8 +71,9 @@ class Repository:
     ) -> Generator[pd.DataFrame, None, None]:
         with self.connect() as con:
             norm = norm if norm else lambda x: x
-            while rows := query_batch(q, con, bsize):
-                yield norm(pd.DataFrame.from_records(rows)) # type: ignore
+            for batch in query_batch(q, con, bsize):
+                df = pd.DataFrame.from_records(batch)
+                yield norm(df)
 
     def query(
         self, q: str, bsize: int = DEFAULT_BSIZE, norm=normalize_data

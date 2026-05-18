@@ -57,10 +57,11 @@ class ModuleEnum(Enum):
     FINGERPRINTER = ModuleType(command="fingerprint", name="fingerprinter", alias="f")
     TAGGER = ModuleType(command="tag", name="tag", alias="t")
 
-
 # ---- Build factory with registry ----
 
 MFACTORY = ModuleFactory()
 for m in ModuleEnum:
     MFACTORY.register(m.value)
 
+def find_module(mod: str) -> ModuleType:
+    return MFACTORY.get(mod)

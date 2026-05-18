@@ -14,6 +14,7 @@ import logging
 from dice.config import (
     DEFAULT_BSIZE,
     ModuleType,
+    find_module
 )
 
 from dice.database import insert_or_ignore
@@ -123,7 +124,7 @@ class Module:
 
     def make_tag(
         self,
-        host: int,
+        host: str,
         tag: str,
         details: str = "",
         protocol: str = "-",
@@ -221,8 +222,10 @@ def defaultModuleInit(_) -> None:
 
 
 def new_module(
-    t: ModuleType, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
+    t: ModuleType | str, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
 ) -> Module:
+    if isinstance(t, str):
+        t = find_module(t)
     return Module(t, name, init, handler)
 
 
