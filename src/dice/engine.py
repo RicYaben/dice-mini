@@ -28,8 +28,9 @@ class Engine:
 
         logger.info("shaking vigorously")
         for m in ModuleEnum:
-            if comps := list(filter(fcomp(m), self.components)):
-                logger.info(f"rolling {m.name}(s)")
+            mo = m.value
+            if comps := list(filter(fcomp(mo), self.components)):
+                logger.info(f"rolling {mo}(s)")
                 for c in comps:
                     c.handle()
 
