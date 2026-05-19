@@ -73,7 +73,7 @@ def parse_certificate(certificate: str) -> dict | None:
     )
 
 
-def eval_times(mod: Module, fids: str, cert: dict) -> None:
+def eval_times(mod: Module, fids: list[int], cert: dict) -> None:
     not_before: datetime = cert.get("not_before") # type: ignore
     not_after: datetime = cert.get("not_after") # type: ignore
     timestamp = datetime.now()
@@ -96,7 +96,7 @@ def eval_times(mod: Module, fids: str, cert: dict) -> None:
         for fid in fids:
             mod.store(mod.make_label(fid, "long-lasting-certificate"))
 
-def eval_crypto(mod: Module, fids: str, cert: dict) -> None:
+def eval_crypto(mod: Module, fids: list[int], cert: dict) -> None:
     sig: str = cert.get("signature_algorithm", "")
     if not sig: 
         return
@@ -110,7 +110,7 @@ def eval_crypto(mod: Module, fids: str, cert: dict) -> None:
         for fid in fids:
             mod.store(mod.make_label(fid, "weak-crypto"))
 
-def eval_key(mod: Module, fids: str, cert: dict) -> None:
+def eval_key(mod: Module, fids: list[int], cert: dict) -> None:
         key = cert.get("pkey")
         if pd.isna(key):
             return
@@ -120,7 +120,8 @@ def eval_key(mod: Module, fids: str, cert: dict) -> None:
                 mod.store(mod.make_label(fid, "short-key"))
 
 def cert_eval_handler(mod: Module) -> None:
-    con = mod.repo().get_connection()
+    con = mod.repo().connect()
+    # TODO: fix this
     q = "..."
     for cert_df in mod.query(query_db("certificates")):
         for _, cert in cert_df.iterrows():

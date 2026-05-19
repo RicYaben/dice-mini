@@ -120,4 +120,3 @@ def search(
                 df = p(df)
 
             print(df.to_json(orient="records", lines=True, force_ascii=False))
-

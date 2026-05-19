@@ -9,6 +9,7 @@ from dice.components import Component
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class Engine:
     # list of components registered
@@ -48,7 +49,13 @@ class Engine:
             for sig in comp.signatures:
                 for mod in sig.modules:
                     rows.append(
-                        [comp.name, str(comp.c_type).upper(), sig.name, mod.collection, mod.name]
+                        [
+                            comp.name,
+                            str(comp.c_type).upper(),
+                            sig.name,
+                            mod.collection,
+                            mod.name,
+                        ]
                     )
 
         if not rows:
@@ -71,7 +78,9 @@ class Engine:
                     current = row[col]
 
                     # Only blank out if the current value matches AND all previous columns are empty
-                    if current == last_seen[col] and all(row[i] == "" for i in range(col)):
+                    if current == last_seen[col] and all(
+                        row[i] == "" for i in range(col)
+                    ):
                         row[col] = ""
                     else:
                         last_seen[col] = current
@@ -95,4 +104,3 @@ class Engine:
 
 def new_engine(*components: Component) -> Engine:
     return Engine(list(components))
-

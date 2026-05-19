@@ -8,6 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class Signature:
     # type of signature
@@ -29,6 +30,7 @@ class Signature:
     def add(self, *module: Module) -> "Signature":
         self.modules.extend(module)
         return self
-    
+
+
 def new_signature(t: ModuleType, name: str, *modules: Module) -> Signature:
     return Signature(t, name, list(modules))

@@ -5,7 +5,6 @@ from typing import Generator
 from collections.abc import Callable
 from pathlib import Path
 
-type Loader = Callable[[str, str, str, int], Generator[pd.DataFrame, None, None]]
 
 def walk(p: str):
     """
@@ -15,7 +14,7 @@ def walk(p: str):
       - File paths → yields the file if it exists
     """
     path = Path(p)
-    
+
     if "*" in p or "?" in p or "[" in p:
         # Glob pattern
         for match in glob.iglob(p, recursive=True):
@@ -31,6 +30,7 @@ def walk(p: str):
         # Direct file path
         yield path
 
+
 def extract_protocol_data(d: dict) -> tuple[str, dict]:
     try:
         first_obj = list(d.values())[0]
@@ -39,12 +39,16 @@ def extract_protocol_data(d: dict) -> tuple[str, dict]:
     except Exception:
         return "", {}
 
+
 def zgrab2_loader_normalizer(df: pd.DataFrame) -> pd.DataFrame:
-    df[["protocol","data"]] = df["data"].apply(lambda raw: pd.Series(extract_protocol_data(raw)))
+    df[["protocol", "data"]] = df["data"].apply(
+        lambda raw: pd.Series(extract_protocol_data(raw))
+    )
 
     if "port" not in df.columns:
         df["port"] = -1
     return df
+
 
 def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]:
     match source:
@@ -52,17 +56,21 @@ def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]
             return zgrab2_loader_normalizer
         case _:
             return lambda x: x
-        
+
+
 def jsonl_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
     # NOTE: engine pyarrow does not support chunking
-    for c in pd.read_json(p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size):
+    for c in pd.read_json(
+        p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size
+    ):
         yield c
-            
+
 
 def csv_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
     for c in pd.read_csv(p, chunksize=batch_size):
         yield c
-        
+
+
 def get_reader(ext: str):
     match ext:
         case ".jsonl":
@@ -71,8 +79,11 @@ def get_reader(ext: str):
             return csv_reader
         case _:
             raise Exception(f"usupported file extension: {ext}")
-        
-def read_resource(resource_id: int, fpath: str, batch_size: int) -> Generator[pd.DataFrame, None, None]:
+
+
+def read_resource(
+    resource_id: int, fpath: str, batch_size: int
+) -> Generator[pd.DataFrame, None, None]:
     p = Path(fpath)
     reader = get_reader(p.suffixes[0])
     for c in reader(p, batch_size):

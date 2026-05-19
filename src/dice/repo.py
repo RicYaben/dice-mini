@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 type RecordsWrapper = Callable[[Any], pd.DataFrame]
 
+
 class Repository:
     def __init__(
         self,
@@ -35,7 +36,9 @@ class Repository:
     def session(self) -> Session:
         return self.con.session()
 
-    def insert(self, items: list[Any], policy=insert_or_ignore, con: Connection | None = None):
+    def insert(
+        self, items: list[Any], policy=insert_or_ignore, con: Connection | None = None
+    ):
         if not items:
             return
 
@@ -67,7 +70,11 @@ class Repository:
                 yield record
 
     def query_batch(
-        self, q: str, bsize: int = DEFAULT_BSIZE, norm = normalize_data, limit: Optional[int] = None
+        self,
+        q: str,
+        bsize: int = DEFAULT_BSIZE,
+        norm=normalize_data,
+        limit: Optional[int] = None,
     ) -> Generator[pd.DataFrame, None, None]:
         with self.connect() as con:
             norm = norm if norm else lambda x: x
@@ -76,24 +83,32 @@ class Repository:
                 yield norm(df)
 
     def query(
-        self, q: str, bsize: int = DEFAULT_BSIZE, norm=normalize_data, limit: Optional[int] = None 
+        self,
+        q: str,
+        bsize: int = DEFAULT_BSIZE,
+        norm=normalize_data,
+        limit: Optional[int] = None,
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
         with self.connect() as con:
             d = query_count(q, con, limit)
         gen = self.query_batch(q, bsize, norm, limit)
         return (d, gen)
-    
-def query_batch(q: str, con: Connection, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None) -> Generator[Sequence, None, None]:
+
+
+def query_batch(
+    q: str, con: Connection, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None
+) -> Generator[Sequence, None, None]:
     if limit is not None:
         q = f"""
         SELECT *
         FROM ({q}) AS subq
         LIMIT {int(limit)}
         """
-        
+
     res = con.execute(text(q)).mappings()
     while rows := res.fetchmany(bsize):
         yield rows
+
 
 def query_count(q: str, con: Connection, limit: Optional[int] = None) -> int:
     if limit is not None:
@@ -104,14 +119,11 @@ def query_count(q: str, con: Connection, limit: Optional[int] = None) -> int:
         """
 
     dq = f"WITH ct AS ({q}) SELECT COUNT(*) AS rows FROM ct;"
-    d = (
-        res[0] if (res := con.execute(text(dq)).fetchone()) else 0
-    )
+    d = res[0] if (res := con.execute(text(dq)).fetchone()) else 0
     return d
+
 
 def new_repository(connector: Connector) -> Repository:
     return Repository(
         con=connector,
     )
-
-

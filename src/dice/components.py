@@ -7,9 +7,17 @@ from tabulate import tabulate
 from dice.config import MFACTORY, ModuleType, ModuleEnum
 from dice.repo import Repository
 from dice.signatures import Signature, new_signature
-from dice.modules import Module, ModuleHandler, ModuleInit, defaultModuleInit, new_module, ModuleRegistry
+from dice.modules import (
+    Module,
+    ModuleHandler,
+    ModuleInit,
+    defaultModuleInit,
+    new_module,
+    ModuleRegistry,
+)
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Component:
@@ -37,6 +45,7 @@ class Component:
 def new_component(t: ModuleType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
 
+
 def new_fingerprinter(
     handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "fp"
 ) -> Component:
@@ -47,6 +56,7 @@ def new_classifier(
     handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "cls"
 ) -> Component:
     return make_component(ModuleEnum.CLASSIFIER.value, preffix, handler, init)
+
 
 @dataclass
 class ComponentFactory:
@@ -71,7 +81,10 @@ def new_component_factory(t: ModuleType, name: str) -> ComponentFactory:
 
 
 def make_component(
-    t: ModuleType, preffix: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
+    t: ModuleType,
+    preffix: str,
+    handler: ModuleHandler,
+    init: ModuleInit = defaultModuleInit,
 ) -> Component:
     fact = new_component_factory(t, "-".join([preffix, "comp"]))
     return fact.make_component(
@@ -80,6 +93,7 @@ def make_component(
             fact.make_module("-".join([preffix, "mod"]), handler, init),
         )
     )
+
 
 class ComponentManager:
     def __init__(self, name: str = "comp") -> None:
@@ -182,13 +196,11 @@ class ComponentManager:
             logger.info(f"Queries: {', '.join(modules)}")
 
         msg = tabulate(
-                rows,
-                headers=["Collection", "Type", "Module"],
-                tablefmt="rounded_outline",
-            )
-        logger.info(
-            f"Modules:\n{msg}"
+            rows,
+            headers=["Collection", "Type", "Module"],
+            tablefmt="rounded_outline",
         )
+        logger.info(f"Modules:\n{msg}")
 
 
 def new_component_manager(study: str) -> ComponentManager:

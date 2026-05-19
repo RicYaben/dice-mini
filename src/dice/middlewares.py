@@ -14,6 +14,7 @@ from dice.health import HealthCheck
 
 logger = logging.getLogger(__name__)
 
+
 def find_host_col(repo: Repository, table: str) -> str | None:
     guesswork = {"ip", "saddr", "host", "addr"}
     q = f"SELECT * FROM '{table}' LIMIT 0"
@@ -24,6 +25,7 @@ def find_host_col(repo: Repository, table: str) -> str | None:
 
         common = guesswork & cols
         return next(iter(common), None)
+
 
 def add_hosts_from_records_table(
     repo: Repository, name: str, col: Optional[str] = "ip"
@@ -38,12 +40,12 @@ def add_hosts_from_records_table(
         tab = get_records_table(con, name)
         c = getattr(tab.c, col)
 
-        q = str(select(
-            c.distinct().label("ip")
-        ).where(
-            ~exists().where(c == Host.ip)
-        ).compile(con))
-        
+        q = str(
+            select(c.distinct().label("ip"))
+            .where(~exists().where(c == Host.ip))
+            .compile(con)
+        )
+
         n = query_count(q, con)
         if not n:
             logger.debug(f"no missing hosts from {name}")
@@ -58,6 +60,7 @@ def add_hosts_from_records_table(
                 inserted = insert_or_ignore(ses, Host, hosts)
                 pbar.update(len(b))
 
+
 def add_missing_hosts(repo: Repository) -> HealthCheck:
     def hc(e: Event):
         if "table" not in e.summary:
@@ -65,9 +68,7 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
             with repo.session() as s:
                 insp = inspect(s.get_bind())
                 tabs = [
-                    name
-                    for name in insp.get_table_names()
-                    if name.endswith("_records")
+                    name for name in insp.get_table_names() if name.endswith("_records")
                 ]
 
             for tab in tabs:
@@ -77,4 +78,5 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
         logger.debug("adding missing hosts...")
         table = e.summary["table"]
         add_hosts_from_records_table(repo, table)
+
     return hc

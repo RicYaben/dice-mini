@@ -8,19 +8,17 @@ from dice.config import DEFAULT_BSIZE
 from dice.health import HealthCheck, new_health_monitor
 from dice.resources import new_resourcerer
 
+
 def resume_cursors(repo: Repository) -> HealthCheck:
     def hc(_):
         con = repo.connect()
-        stmt = (
-            select(Resource)
-            .join(Cursor)
-            .where(Cursor.idx != -1)
-        )
+        stmt = select(Resource).join(Cursor).where(Cursor.idx != -1)
 
         rows = con.execute(stmt).all()
         for res in rows:
             r = new_resourcerer(res.id, True, DEFAULT_BSIZE)
             r.cast(con)
+
     return hc
 
 

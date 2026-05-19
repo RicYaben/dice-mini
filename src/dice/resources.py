@@ -18,6 +18,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
 def load_resource(s: Session, res_id: int):
     stmt = (
         select(Resource, Cursor, Source)
@@ -31,10 +32,11 @@ def load_resource(s: Session, res_id: int):
     if not row:
         raise ValueError(f"resource not found: {res_id}")
     return row.tuple()
-    
+
 
 class Sourcerer:
     """Something to load sources"""
+
     _gen: Optional[Generator[pd.DataFrame, None, None]] = None
     _peek: Optional[pd.DataFrame] = None
     _peeked: bool = False
@@ -46,7 +48,7 @@ class Sourcerer:
         self.res_id = res_id
         self.resume = resume
         self.bsize = bsize
-    
+
     @property
     def peek(self) -> pd.DataFrame | None:
         if not self._gen:
@@ -54,7 +56,7 @@ class Sourcerer:
 
         if self._peeked:
             return self._peek
-        
+
         try:
             assert isinstance(self._gen, Generator)
             p = next(self._gen)
@@ -64,14 +66,14 @@ class Sourcerer:
 
         self._peeked = True
         return self._peek
-    
+
     @property
-    def columns(self)  -> tuple[list[str], list[str]]:
+    def columns(self) -> tuple[list[str], list[str]]:
         if self._oc or self._ic:
             return (self._oc, self._ic)
-        
+
         if self.empty():
-            raise ValueError(f"unable to get columns: empty source") 
+            raise ValueError(f"unable to get columns: empty source")
 
         p = self.peek
         assert isinstance(p, pd.DataFrame)
@@ -92,14 +94,14 @@ class Sourcerer:
         self._oc = oc
         self._ic = ic
         return (oc, ic)
-    
+
     def exists(self, fpath: str) -> bool:
         return os.path.exists(fpath)
-    
-    def load(self, fpath: str, i: int = 0) -> None:            
+
+    def load(self, fpath: str, i: int = 0) -> None:
         if self._gen:
             return
-        
+
         gen = read_resource(self.res_id, fpath, self.bsize)
         for _ in range(i):
             next(gen, None)
@@ -110,7 +112,9 @@ class Sourcerer:
         self._peek = None
         self._peeked = False
 
-    def format_columns(self, df: pd.DataFrame, res_id: int, oc, ic: list[str]) -> pd.DataFrame:
+    def format_columns(
+        self, df: pd.DataFrame, res_id: int, oc, ic: list[str]
+    ) -> pd.DataFrame:
         # convert to string dict and list cols
         for col in oc:
             df[col] = df[col].map(
@@ -119,7 +123,9 @@ class Sourcerer:
 
         # convert to int64 numeric cols
         for col in ic:
-            df[col] = pd.to_numeric(df[col], errors="coerce", dtype_backend="pyarrow", downcast="float")
+            df[col] = pd.to_numeric(
+                df[col], errors="coerce", dtype_backend="pyarrow", downcast="float"
+            )
 
         df["resource_id"] = res_id
         return df
@@ -127,7 +133,7 @@ class Sourcerer:
     def cast(self, con: Connection) -> Generator[pd.DataFrame, None, None]:
         with Session(con) as s:
             res, cursor, src = load_resource(s, self.res_id)
-            
+
             if not self.resume or cursor.idx < 0:
                 # we change the cursor to the beggining
                 cursor.idx = 0
@@ -154,7 +160,7 @@ class Sourcerer:
     def empty(self) -> bool:
         p = self.peek
         return p is None or p.empty
-    
+
     def check(self, fpath: str):
         if not self.exists(fpath):
             raise ValueError(f"source not found: {fpath}")
@@ -166,35 +172,39 @@ def new_resourcerer(res_id: int, resume: bool, bsize: int) -> Sourcerer:
     return Sourcerer(res_id, resume, bsize)
 
 
-def add_resource(repo: Repository, name: str, source: int, fpath: str, resume: bool = True, bsize: int = DEFAULT_BSIZE):
-        logger.info(f"adding resource from {fpath} ({bsize}/b)")
+def add_resource(
+    repo: Repository,
+    name: str,
+    source: int,
+    fpath: str,
+    resume: bool = True,
+    bsize: int = DEFAULT_BSIZE,
+):
+    logger.info(f"adding resource from {fpath} ({bsize}/b)")
 
-        # load the resource or create it with its cursor
-        with repo.session() as s:
-            res, _ = get_or_create(s, Resource, fpath=fpath, source_id=source)
-            cursor, _ = get_or_create(s, Cursor, resource_id=res.id)
-            res.cursor = cursor
-            s.commit()
-            s.refresh(res)
+    # load the resource or create it with its cursor
+    with repo.session() as s:
+        res, _ = get_or_create(s, Resource, fpath=fpath, source_id=source)
+        cursor, _ = get_or_create(s, Cursor, resource_id=res.id)
+        res.cursor = cursor
+        s.commit()
+        s.refresh(res)
 
-            sourcerer = new_resourcerer(res.id, resume, bsize) # type: ignore
+        sourcerer = new_resourcerer(res.id, resume, bsize)  # type: ignore
 
-        with repo.connect() as con:
-            table_name = f"{name}_records"
-            current_id = 1
-            if inspect(con).has_table(table_name):
-                # --- Step 2: get current max id ---
-                max_id = con.execute(
-                    text(f"SELECT MAX(id) FROM {table_name}")
-                ).scalar()
-                current_id = (max_id or 0) + 1
+    with repo.connect() as con:
+        table_name = f"{name}_records"
+        current_id = 1
+        if inspect(con).has_table(table_name):
+            # --- Step 2: get current max id ---
+            max_id = con.execute(text(f"SELECT MAX(id) FROM {table_name}")).scalar()
+            current_id = (max_id or 0) + 1
 
-        with repo.connect() as con:
-            gen = sourcerer.cast(con)
-            for c in tqdm(gen):
-                n = len(c)
-                c.insert(0, "id", range(current_id, current_id + n))
-                current_id += n
+    with repo.connect() as con:
+        gen = sourcerer.cast(con)
+        for c in tqdm(gen):
+            n = len(c)
+            c.insert(0, "id", range(current_id, current_id + n))
+            current_id += n
 
-                c.to_sql(table_name, con, if_exists="append", index=False)
-
+            c.to_sql(table_name, con, if_exists="append", index=False)
