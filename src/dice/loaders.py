@@ -41,6 +41,9 @@ def extract_protocol_data(d: dict) -> tuple[str, dict]:
 
 def zgrab2_loader_normalizer(df: pd.DataFrame) -> pd.DataFrame:
     df[["protocol","data"]] = df["data"].apply(lambda raw: pd.Series(extract_protocol_data(raw)))
+
+    if "port" not in df.columns:
+        df["port"] = -1
     return df
 
 def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]:

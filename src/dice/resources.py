@@ -103,8 +103,6 @@ class Sourcerer:
         gen = read_resource(self.res_id, fpath, self.bsize)
         for _ in range(i):
             next(gen, None)
-
-        print(f"there is a gen: {fpath}")
         self._gen = gen
 
     def reset(self):

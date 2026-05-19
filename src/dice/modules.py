@@ -1,4 +1,4 @@
-from typing import Optional, Generator, Any, Callable, Type
+from typing import Literal, Optional, Generator, Any, Callable, Type
 from dataclasses import dataclass, field
 from tqdm import tqdm
 from importlib import import_module
@@ -45,7 +45,6 @@ class Module:
     # name of the module
     name: str
 
-    # just take a connection and do something to it
     _init: ModuleInit
     _handler: ModuleHandler
     _repo: Optional[Repository] = None
@@ -170,7 +169,7 @@ class Module:
         self,
         q: str,
         itemizer,
-        orient: str = "rows",
+        orient: Literal["rows", "tuples", "dataframe"] = "rows",
         pbar: bool = True,
         norm = None,
     ) -> None:

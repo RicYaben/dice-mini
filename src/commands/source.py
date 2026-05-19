@@ -18,6 +18,7 @@ def add(
     ),
     fpath: str | None = typer.Option(
         None,
+        "-f",
         "--fpath",
         help="Source filepath"
     ),
