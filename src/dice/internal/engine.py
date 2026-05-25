@@ -1,39 +1,35 @@
-from dataclasses import dataclass
 from tabulate import tabulate
+
+from .repository import Repository
+from .components import Component
+
+from dice.shared.modules import MFACTORY
 
 import logging
 
-from dice.config import ModuleEnum
-from dice.repo import Repository
-from dice.components import Component
-
 logger = logging.getLogger(__name__)
 
-
-@dataclass
 class Engine:
-    # list of components registered
-    components: list[Component]
+    def __init__(self, comps: list[Component]) -> None:
+        self.components = comps
 
     def run(
         self,
         repo: Repository,
     ) -> Repository:
 
-        def fcomp(t):
-            return lambda c: c.c_type == t
-
-        logger.info("initializing")
+        logger.info("initializing (d1)")
         for c in self.components:
-            c.init(repo)
+            c.initialize(repo)
 
-        logger.info("shaking vigorously")
-        for m in ModuleEnum:
-            mo = m.value
-            if comps := list(filter(fcomp(mo), self.components)):
-                logger.info(f"rolling {mo}(s)")
+        logger.info("shaking vigorously (d2)")
+        rcomps = self.components
+        for m in MFACTORY.all():
+            if comps := list(filter(lambda x: x.t == m, rcomps)):
+                logger.info(f"rolling {m.name}(s)")
                 for c in comps:
                     c.handle()
+                    rcomps.remove(c)
 
         return repo
 
@@ -45,16 +41,16 @@ class Engine:
         rows = []
 
         # collect rows: one row per module
+        # TODO: add the registry where the module is located?
         for comp in self.components:
             for sig in comp.signatures:
                 for mod in sig.modules:
                     rows.append(
                         [
                             comp.name,
-                            str(comp.c_type).upper(),
+                            str(comp.t).upper(),
                             sig.name,
-                            mod.collection,
-                            mod.name,
+                            mod.desc.name,
                         ]
                     )
 
@@ -96,7 +92,7 @@ class Engine:
         print(
             tabulate(
                 rows,
-                headers=["Component", "Type", "Signature", "Collection", "Module"],
+                headers=["Component", "Type", "Signature", "Module"],
                 tablefmt="rounded_outline",
             )
         )

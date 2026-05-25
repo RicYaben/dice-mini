@@ -2,7 +2,7 @@ import ujson
 import pandas as pd
 
 from typing import Any, Callable
-from dice.config import DATA_PREFIX
+from .config import DATA_PREFIX
 
 
 def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
@@ -56,7 +56,7 @@ def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
     return normalize_data(df, DATA_PREFIX)
 
 
-def get_record_field(r, field: str, default: Any = None, prefix: str = "data_") -> Any:
+def get_record_field(r, field: str, default: Any = None, prefix: str = DATA_PREFIX) -> Any:
     v = r.get(prefix + field, default)
 
     if isinstance(v, (list, tuple)):
@@ -65,7 +65,7 @@ def get_record_field(r, field: str, default: Any = None, prefix: str = "data_") 
     return v if not pd.isna(v) else default
 
 
-def record_to_dict(r, prefix: str = "data_") -> dict:
+def record_to_dict(r, prefix: str = DATA_PREFIX) -> dict:
     d = r.to_dict()
     d = {k[len(prefix) :]: v for k, v in d.items() if k.startswith(prefix)}
     return d

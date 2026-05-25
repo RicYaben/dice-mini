@@ -3,9 +3,9 @@ from sqlalchemy import MetaData
 from typing_extensions import Annotated
 
 from analysis.tools import new_anonymizer, new_remover
-from dice.start import load_repository
-from dice.ast import make_parser
-from dice.info import new_info
+from dice.cli.tools import load_repository
+from dice.internal.ast import make_parser
+from dice.internal.info import new_info
 
 import ujson
 import typer
@@ -73,6 +73,7 @@ def search(
         "-l",
         "--limit"
     ),
+    # TODO: store mappings
     anonymize: Annotated[str, typer.Option()] = "",
     remove: Annotated[str, typer.Option()] = "",
     fields: Annotated[str, typer.Option()] = "hosts,ports,services,labels,tags", 

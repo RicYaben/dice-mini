@@ -44,6 +44,7 @@ def zgrab2_loader_normalizer(df: pd.DataFrame) -> pd.DataFrame:
     df[["protocol", "data"]] = df["data"].apply(
         lambda raw: pd.Series(extract_protocol_data(raw))
     )
+    df = df.rename({'ip': 'host'}, axis=1)
 
     if "port" not in df.columns:
         df["port"] = -1

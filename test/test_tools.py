@@ -2,11 +2,11 @@ import os
 from tempfile import TemporaryDirectory
 from sqlmodel import Session
 
-from dice.database import get_or_create
-from dice.loaders import walk
-from dice.models import Source
-from dice.repo import Repository
-from dice.start import load_repository
+from dice.internal.database import get_or_create
+from dice.internal.loaders import walk
+from dice.internal.models import Source
+from dice.internal.repository import Repository
+from dice.cli.tools import load_repository
 
 def make_test_zgrab2_source(s: Session, dir: str) -> tuple[Source, str]:
     fpath = os.path.join(dir, "results.jsonl")

@@ -2,10 +2,10 @@ import pandas as pd
 
 from dataclasses import dataclass
 
-from dice.config import ModuleEnum
-from dice.modules import Module, new_module
-from dice.query import query_db
-from dice.records import Access, Authentication, Connection, Maturity, Record, make_record
+from dice.internal.config import ModuleEnum
+from dice.internal.modules import Module, new_module
+from dice.sdk.query import query
+from dice._experimental.records import Access, Authentication, Connection, Maturity, Record, make_record
 
 def vuln_cls_init(mod: Module) -> None:
     # Encryption
@@ -151,7 +151,7 @@ def vulnerable_cls_handler(mod: Module) -> None:
         if Access.EXECUTE in acc:
             mod.store(mod.make_label(fid, "execute-access"))
 
-    q = query_db("fingerprint")
+    q = query("fingerprint")
     mod.itemize(q, handler, orient="rows")
 
 def make_classifier() -> Module:

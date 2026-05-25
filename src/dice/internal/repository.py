@@ -2,23 +2,27 @@ import pandas as pd
 import warnings
 import logging
 
-from typing import Any, Generator, Callable, Optional, Sequence
+from uuid import uuid4
+from typing import Generator, Optional, Sequence
 from sqlmodel import Session, text
-from sqlalchemy import Connection, Row
+from sqlalchemy import Connection
 
-from dice.health import HealthMonitor
-from dice.config import DEFAULT_BSIZE
-from dice.database import Connector, insert_or_ignore
-from dice.helpers import normalize_data
+from .health import HealthMonitor
+from .config import DEFAULT_BSIZE
+from .database import Connector, insert_or_ignore
+from .helpers import normalize_data
+
+from dice.shared.interfaces import T
+from dice.shared.interfaces import Repository as R
+
+from dice.shared.result import SearchResult
 
 warnings.simplefilter(action="ignore", category=UserWarning)
 
 logger = logging.getLogger(__name__)
 
-type RecordsWrapper = Callable[[Any], pd.DataFrame]
 
-
-class Repository:
+class Repository(R):
     def __init__(
         self,
         con: Connector,
@@ -37,7 +41,7 @@ class Repository:
         return self.con.session()
 
     def insert(
-        self, items: list[Any], policy=insert_or_ignore, con: Connection | None = None
+        self, items: list[T], policy=insert_or_ignore, con: Connection | None = None
     ):
         if not items:
             return
@@ -50,9 +54,7 @@ class Repository:
             policy(s, model, items)
             s.flush()
 
-    def simple_query(
-        self, q: str, bsize: int = DEFAULT_BSIZE
-    ) -> Generator[dict, None, None]:
+    def query(self, q: str, bsize: int = DEFAULT_BSIZE) -> Generator[dict, None, None]:
         with self.connect() as c:
             res = c.execute(text(q))
             cols = [c[0] for c in res.cursor.description]  # type: ignore
@@ -64,12 +66,12 @@ class Repository:
                     continue
                 break
 
-    def stream(self, q: str) -> Generator[dict]:
-        for batch in self.simple_query(q):
+    def querys(self, q: str) -> Generator[dict]:
+        for batch in self.query(q):
             for record in batch:
                 yield record
 
-    def query_batch(
+    def queryb(
         self,
         q: str,
         bsize: int = DEFAULT_BSIZE,
@@ -82,7 +84,7 @@ class Repository:
                 df = pd.DataFrame.from_records(batch)
                 yield norm(df)
 
-    def query(
+    def queryc(
         self,
         q: str,
         bsize: int = DEFAULT_BSIZE,
@@ -91,8 +93,16 @@ class Repository:
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
         with self.connect() as con:
             d = query_count(q, con, limit)
-        gen = self.query_batch(q, bsize, norm, limit)
+        gen = self.queryb(q, bsize, norm, limit)
         return (d, gen)
+
+    def search(self, q: str) -> SearchResult:
+        view = f"tmp_{uuid4().hex}"
+
+        con = self.connect()
+        con.execute(text(f"CREATE TEMP VIEW {view} AS {q}"))
+
+        return SearchResult(con, view)
 
 
 def query_batch(

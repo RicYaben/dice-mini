@@ -2,9 +2,9 @@ from difflib import ndiff
 from sqlalchemy import MetaData
 from tqdm import tqdm
 
-from dice.ast import make_parser
-from dice.info import new_info
-from dice.repo import Repository
+from dice.internal.ast import make_parser
+from dice.internal.info import new_info
+from dice.internal.repository import Repository
 
 import pandas as pd
 import numpy as np

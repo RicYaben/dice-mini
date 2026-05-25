@@ -1,6 +1,6 @@
 import unittest
 import ujson
-from dice.ast import new_transformer, new_parser, get_grammar
+from dice.internal.ast import new_transformer, new_parser, get_grammar
 
 class TestAST(unittest.TestCase):
     queries = [

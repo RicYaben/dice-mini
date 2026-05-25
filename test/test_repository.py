@@ -2,15 +2,15 @@ import unittest
 import json
 import pandas as pd
 
-from dice.query import query_db
+from dice.sdk.query import query
 from test.test_tools import load_test_repository, summary
-from dice.constructors import new_label, new_fingerprint, new_fp_label
+from dice.internal.constructors import new_label, new_fingerprint, new_fp_label
 
 class TestRepository(unittest.TestCase):
 
     def test_add_records(self):
         repo = load_test_repository()
-        n = repo.query_count(query_db("host", ip_in= ["1.1.1.1", "2.2.2.2"]))
+        n = repo.query_count(query("host", ip_in= ["1.1.1.1", "2.2.2.2"]))
         self.assertEqual(n, 2)
 
     def test_fingerprint_and_label(self):
@@ -24,7 +24,7 @@ class TestRepository(unittest.TestCase):
 
         # dummy fingerprint
         fps = []
-        for r in repo.stream(query_db("host", ip_in=targets)):
+        for r in repo.stream(query("host", ip_in=targets)):
                 data = {"port": r["port"]}
                 fp = new_fingerprint("test", resource_id=r["resource_id"], record_id=r["id"], host=r["ip"], data=json.dumps(data))
                 fps.append(fp)
@@ -33,7 +33,7 @@ class TestRepository(unittest.TestCase):
 
         # label fingerprints
         fp_labs = []
-        for _, fp in repo.stream(query_db("fingerprint", ip_in=targets)):
+        for _, fp in repo.stream(query("fingerprint", ip_in=targets)):
             fp_labs.append(new_fp_label(fp["id"], lab.id))
 
         repo.insert(*fp_labs)

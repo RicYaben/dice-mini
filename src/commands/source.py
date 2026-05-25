@@ -2,12 +2,12 @@ from pathlib import Path
 
 import typer
 
-from dice.database import get_or_create
-from dice.loaders import walk
-from dice.models import Source
-from dice.resources import add_resource
-from dice.start import load_repository
-from dice.config import DEFAULT_BSIZE
+from dice.internal.database import get_or_create
+from dice.internal.loaders import walk
+from dice.internal.resources import add_resource
+from dice.internal.config import DEFAULT_BSIZE
+from dice.shared.models import Source
+from dice.cli.tools import load_repository
 
 source_app = typer.Typer(help="Insert a source into the database")
 
@@ -46,4 +46,4 @@ def add(
             fpath += ".*"
 
     for p in walk(fpath):
-        add_resource(repo, name, src.id, str(p), resume=resume, bsize=batch) # type: ignore
+        add_resource(repo, src, str(p), resume=resume, bsize=batch) # type: ignore

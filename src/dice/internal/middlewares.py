@@ -5,12 +5,14 @@ from tqdm import tqdm
 from sqlmodel import exists, select, text
 from typing import Optional
 
-from dice.constructors import new_host
-from dice.database import insert_or_ignore
-from dice.events import Event
-from dice.models import Host, get_records_table
-from dice.repo import Repository, query_batch, query_count
-from dice.health import HealthCheck
+from .config import DEFAULT_BSIZE
+from .database import insert_or_ignore
+from .events import Event
+from .repository import Repository, query_batch, query_count
+from .health import HealthCheck
+from .resources import new_resourcerer
+
+from dice.shared.models import Cursor, Host, Resource, get_records_table
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,7 @@ def add_hosts_from_records_table(
 
         with repo.session() as ses:
             for b in query_batch(q, ses.connection()):
-                hosts = [new_host(ip=str(r.ip)) for r in b]
+                hosts = [Host(ip=str(r.ip)) for r in b]
                 inserted = insert_or_ignore(ses, Host, hosts)
                 pbar.update(len(b))
 
@@ -78,5 +80,18 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
         logger.debug("adding missing hosts...")
         table = e.summary["table"]
         add_hosts_from_records_table(repo, table)
+
+    return hc
+
+
+def resume_cursors(repo: Repository) -> HealthCheck:
+    def hc(_):
+        con = repo.connect()
+        stmt = select(Resource).join(Cursor).where(Cursor.idx != -1)
+
+        rows = con.execute(stmt).all()
+        for res in rows:
+            r = new_resourcerer(res.id, True, DEFAULT_BSIZE)
+            r.cast(con)
 
     return hc

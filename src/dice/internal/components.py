@@ -4,17 +4,14 @@ import logging
 from dataclasses import dataclass
 from tabulate import tabulate
 
-from dice.config import MFACTORY, ModuleType, ModuleEnum
-from dice.repo import Repository
-from dice.signatures import Signature, new_signature
-from dice.modules import (
+from .repository import Repository
+from .signatures import Signature, new_signature
+from .modules import (
     Module,
-    ModuleHandler,
-    ModuleInit,
-    defaultModuleInit,
-    new_module,
     ModuleRegistry,
 )
+
+from dice.shared.modules import MFACTORY, ModuleType
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +19,15 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Component:
     # type of component: classifier, fingerprinter, scanner...
-    c_type: ModuleType
+    t: ModuleType
     # name of the component
     name: str
     # list of signatures registered
     signatures: list[Signature]
 
-    def init(self, repo: Repository) -> "Component":
+    def initialize(self, repo: Repository) -> "Component":
         for s in self.signatures:
-            s.init(repo)
+            s.initialize(repo)
         return self
 
     def handle(self) -> None:
@@ -44,55 +41,6 @@ class Component:
 
 def new_component(t: ModuleType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
-
-
-def new_fingerprinter(
-    handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "fp"
-) -> Component:
-    return make_component(ModuleEnum.FINGERPRINTER.value, preffix, handler, init)
-
-
-def new_classifier(
-    handler: ModuleHandler, init: ModuleInit = defaultModuleInit, preffix: str = "cls"
-) -> Component:
-    return make_component(ModuleEnum.CLASSIFIER.value, preffix, handler, init)
-
-
-@dataclass
-class ComponentFactory:
-    # type of component, signatures, and modules
-    t: ModuleType
-    name: str
-
-    def make_signature(self, name: str, *module: Module) -> Signature:
-        return new_signature(self.t, name, *module)
-
-    def make_module(
-        self, name: str, handler: ModuleHandler, init: ModuleInit = defaultModuleInit
-    ) -> Module:
-        return new_module(self.t, name, handler, init)
-
-    def make_component(self, *signature: Signature) -> Component:
-        return new_component(self.t, self.name, *signature)
-
-
-def new_component_factory(t: ModuleType, name: str) -> ComponentFactory:
-    return ComponentFactory(t, name)
-
-
-def make_component(
-    t: ModuleType,
-    preffix: str,
-    handler: ModuleHandler,
-    init: ModuleInit = defaultModuleInit,
-) -> Component:
-    fact = new_component_factory(t, "-".join([preffix, "comp"]))
-    return fact.make_component(
-        fact.make_signature(
-            "-".join([preffix, "sig"]),
-            fact.make_module("-".join([preffix, "mod"]), handler, init),
-        )
-    )
 
 
 class ComponentManager:
@@ -126,7 +74,7 @@ class ComponentManager:
         def collect(registry: "ModuleRegistry", path: list[str] = []):
             full_path = path + [registry.name]
             for m in registry.modules:
-                full_path_with_module = full_path + [m.name]
+                full_path_with_module = full_path + [m.desc.name]
                 include = False
                 if modules is None:
                     include = True
@@ -149,7 +97,7 @@ class ComponentManager:
         self, t: ModuleType | None = None, modules: list[str] = ["*"]
     ) -> list[Module]:
         found = self.find(modules)
-        found = [m for _, m in found if m.m_type == t]
+        found = [m for _, m in found if m.t == t]
 
         # Deduplicate
         uniq = {id(m): m for m in found}
@@ -174,7 +122,7 @@ class ComponentManager:
             logger.info("No modules found.")
             return
 
-        rows = [[path, str(m.m_type).capitalize(), m.name] for path, m in found]
+        rows = [[path, str(m.t).capitalize(), m.desc.name] for path, m in found]
 
         # sort and merge cells visually
         rows.sort(key=lambda r: (r[0], r[1], r[2]))
@@ -200,7 +148,7 @@ class ComponentManager:
             headers=["Collection", "Type", "Module"],
             tablefmt="rounded_outline",
         )
-        logger.info(f"Modules:\n{msg}")
+        logger.info(f"\n{msg}")
 
 
 def new_component_manager(study: str) -> ComponentManager:

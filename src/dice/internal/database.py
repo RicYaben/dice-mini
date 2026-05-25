@@ -1,10 +1,10 @@
 from sqlite3 import IntegrityError
-from typing import Iterable, Literal, Optional, Sequence, Type
+from typing import Any, Iterable, Literal, Optional, Sequence, Type
 from sqlalchemy import Connection, Engine, Row
 from sqlmodel import SQLModel, Session, select, insert, create_engine
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from dice.models import Model
+from dice.shared.models import Model
 
 
 def insert_records(
@@ -46,10 +46,11 @@ def insert_or_ignore(
         return []
 
     session.commit()
+    session.exec(select(model).execution_options(populate_existing=True))
     return result
 
 
-def get_or_create(session: Session, model, **kwargs):
+def get_or_create(session: Session, model: Type[Model], **kwargs) -> tuple[Any, bool]:
     # Try to get existing
     obj = session.exec(select(model).filter_by(**kwargs)).first()  # type: ignore
     if obj:

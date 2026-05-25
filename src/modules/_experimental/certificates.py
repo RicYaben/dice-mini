@@ -4,8 +4,8 @@ from cryptography.hazmat.primitives import serialization
 
 import pandas as pd
 
-from dice.modules import Module
-from dice.query import query_db
+from dice.internal.modules import Module
+from dice.sdk.query import query
 
 def certs_cls_init(mod: Module) -> None:
     mod.register_label(
@@ -123,7 +123,7 @@ def cert_eval_handler(mod: Module) -> None:
     con = mod.repo().connect()
     # TODO: fix this
     q = "..."
-    for cert_df in mod.query(query_db("certificates")):
+    for cert_df in mod.query(query("certificates")):
         for _, cert in cert_df.iterrows():
             fids = con.execute(q.format(cert=cert)).df()["id"].tolist()
             eval_crypto(mod, fids, cert)
@@ -154,5 +154,5 @@ def scan_certificates(mod: Module) -> None:
                 return
             
             mod.store(cert)
-    mod.with_pbar(handler, query_db("fingerprint", prefix=""), desc="certificates")
+    mod.with_pbar(handler, query("fingerprint", prefix=""), desc="certificates")
         

@@ -1,17 +1,16 @@
 from itertools import chain
 from typing import Generator, Optional
-from sqlalchemy import Connection, inspect, select, text
-
+from sqlalchemy import Connection, select
 from sqlmodel import Session
 from tqdm import tqdm
 
-from dice.config import DEFAULT_BSIZE
-from dice.database import get_or_create
-from dice.loaders import read_resource, get_loader_normalizer
-from dice.models import Resource, Cursor, Source
-from dice.repo import Repository
+from .config import DEFAULT_BSIZE
+from .database import get_or_create
+from .loaders import read_resource, get_loader_normalizer
+from .repository import Repository
 
-import ujson
+from dice.shared.models import Record, Resource, Cursor, Source
+
 import pandas as pd
 import logging
 import os
@@ -19,7 +18,7 @@ import os
 logger = logging.getLogger(__name__)
 
 
-def load_resource(s: Session, res_id: int):
+def load_resource(s: Session, res_id: int) -> tuple[Resource, Cursor, Source]:
     stmt = (
         select(Resource, Cursor, Source)
         .select_from(Resource)
@@ -41,7 +40,6 @@ class Sourcerer:
     _peek: Optional[pd.DataFrame] = None
     _peeked: bool = False
 
-    _oc: list[str] = []
     _ic: list[str] = []
 
     def __init__(self, res_id: int, resume: bool, bsize: int) -> None:
@@ -67,10 +65,11 @@ class Sourcerer:
         self._peeked = True
         return self._peek
 
+    # TODO: this may not be necessary anymore
     @property
-    def columns(self) -> tuple[list[str], list[str]]:
-        if self._oc or self._ic:
-            return (self._oc, self._ic)
+    def columns(self) -> list[str]:
+        if self._ic:
+            return self._ic
 
         if self.empty():
             raise ValueError(f"unable to get columns: empty source")
@@ -82,18 +81,11 @@ class Sourcerer:
         logger.debug(f"polling source with {n}/{len(p)}")
         s = p.sample(n)
 
-        # object cols
-        oc = []
-        for col in p.select_dtypes(include=["object"]).columns:
-            if s[col].apply(lambda x: isinstance(x, (dict, list))).any():
-                oc.append(col)
-
         # numeric cols
         ic = list(p.select_dtypes(include=["number"]).columns)
 
-        self._oc = oc
         self._ic = ic
-        return (oc, ic)
+        return ic
 
     def exists(self, fpath: str) -> bool:
         return os.path.exists(fpath)
@@ -113,14 +105,8 @@ class Sourcerer:
         self._peeked = False
 
     def format_columns(
-        self, df: pd.DataFrame, res_id: int, oc, ic: list[str]
+        self, df: pd.DataFrame, res_id: int, ic: list[str]
     ) -> pd.DataFrame:
-        # convert to string dict and list cols
-        for col in oc:
-            df[col] = df[col].map(
-                lambda x: ujson.dumps(x) if isinstance(x, (dict, list)) else x
-            )
-
         # convert to int64 numeric cols
         for col in ic:
             df[col] = pd.to_numeric(
@@ -145,11 +131,11 @@ class Sourcerer:
             assert isinstance(p, pd.DataFrame)
             assert self._gen
 
-            oc, ic = self.columns
+            ic = self.columns
             norm = get_loader_normalizer(src.name)
             for df in chain([p], self._gen):
                 ret = norm(df)
-                fmt = self.format_columns(ret, self.res_id, oc, ic)
+                fmt = self.format_columns(ret, self.res_id, ic)
                 yield fmt
                 cursor.update(s)
 
@@ -174,8 +160,7 @@ def new_resourcerer(res_id: int, resume: bool, bsize: int) -> Sourcerer:
 
 def add_resource(
     repo: Repository,
-    name: str,
-    source: int,
+    source: Source,
     fpath: str,
     resume: bool = True,
     bsize: int = DEFAULT_BSIZE,
@@ -184,27 +169,25 @@ def add_resource(
 
     # load the resource or create it with its cursor
     with repo.session() as s:
-        res, _ = get_or_create(s, Resource, fpath=fpath, source_id=source)
+        res, _ = get_or_create(s, Resource, fpath=fpath, source_id=source.id)
         cursor, _ = get_or_create(s, Cursor, resource_id=res.id)
         res.cursor = cursor
         s.commit()
         s.refresh(res)
 
-        sourcerer = new_resourcerer(res.id, resume, bsize)  # type: ignore
-
-    with repo.connect() as con:
-        table_name = f"{name}_records"
-        current_id = 1
-        if inspect(con).has_table(table_name):
-            # --- Step 2: get current max id ---
-            max_id = con.execute(text(f"SELECT MAX(id) FROM {table_name}")).scalar()
-            current_id = (max_id or 0) + 1
+        sourcerer = new_resourcerer(res.id, resume, bsize)
 
     with repo.connect() as con:
         gen = sourcerer.cast(con)
         for c in tqdm(gen):
-            n = len(c)
-            c.insert(0, "id", range(current_id, current_id + n))
-            current_id += n
-
-            c.to_sql(table_name, con, if_exists="append", index=False)
+            rdf = [
+                Record(
+                    source=source.name,
+                    resource_id=res.id, 
+                    host=r["host"], 
+                    data=r["data"], 
+                    port=r["port"], 
+                    protocol=r["protocol"]
+                ) for _, r in c.iterrows()
+            ]
+            repo.insert(rdf, con=con)

@@ -1,7 +1,7 @@
 import logging
 from typing import Callable
 
-from dice.events import Event, EventType, new_event
+from .events import Event, EventType, new_event
 
 logger = logging.getLogger(__name__)
 

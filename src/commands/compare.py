@@ -1,10 +1,14 @@
 import typer
+
 from typing_extensions import Annotated
-from dice.repo import new_repository
-from dice.database import new_connector
+
+from dice.internal.repository import new_repository
+from dice.internal.database import new_connector
+
 from analysis.comparing import compare
 
 compare_app = typer.Typer(help="Compare two datasets")
+
 
 @compare_app.command(name="compare")
 def diff(
@@ -13,7 +17,7 @@ def diff(
     d2: str = typer.Argument(help="Comparing dataset"),
     fields: Annotated[str, typer.Option()] = "hosts,ports,services",
     exclude: Annotated[str, typer.Option()] = "",
-    output: Annotated[str, typer.Option()] = "comparison.jsonl"
+    output: Annotated[str, typer.Option()] = "comparison.jsonl",
 ) -> None:
     flist = fields.split(",")
     if exclude:
@@ -22,4 +26,3 @@ def diff(
     r1 = new_repository(new_connector(d1))
     r2 = new_repository(new_connector(d2))
     compare(r1, r2, q, flist, output)
-
