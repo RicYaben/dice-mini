@@ -3,20 +3,6 @@ from sqlalchemy.dialects import sqlite
 
 from dice.shared.models import Model
 
-# q = to_sql(
-#     select(Record)
-#     .where(
-#         Record.protocol == "mqtt",
-#         func.coalesce(
-#             func.json_array_length(
-#                 Record.data,
-#                 "$.topics",
-#             ),
-#             0,
-#         ) > 0,
-#     )
-# )
-
 def parse_clause(clause: str, value: Any) -> str:
     # Operators
     ops = {

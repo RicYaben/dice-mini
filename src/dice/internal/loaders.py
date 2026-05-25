@@ -5,6 +5,8 @@ from typing import Generator
 from collections.abc import Callable
 from pathlib import Path
 
+from pandas import json_normalize
+
 
 def walk(p: str):
     """
@@ -30,11 +32,13 @@ def walk(p: str):
         # Direct file path
         yield path
 
-
 def extract_protocol_data(d: dict) -> tuple[str, dict]:
     try:
-        first_obj = list(d.values())[0]
-        protocol = first_obj.get("protocol")
+        first_obj: dict = list(d.values())[0]
+        protocol: str = first_obj.get("protocol", "-")
+        first_obj.update(first_obj["result"])
+        del first_obj["result"]
+
         return protocol, first_obj
     except Exception:
         return "", {}

@@ -15,12 +15,17 @@ class Condition:
     json: bool = False
 
 def compile_condition(model, c: Condition):
-    # JSON path
-    if c.json:
-        expr = func.json_extract(model.data, f"$.{c.field}")
+    # JSON detection
+    if "." in c.field:
+        root, *path = c.field.split(".")
+        json_path = "$." + ".".join(path)
+
+        col = getattr(model, root)
+        expr = func.json_extract(col, json_path)
     else:
         expr = getattr(model, c.field)
 
+    # operators
     if c.op == "eq":
         return expr == c.value
     if c.op == "ne":
@@ -42,24 +47,12 @@ def compile_condition(model, c: Condition):
     raise ValueError(f"Unknown op {c.op}")
 
 def parse_condition(key: str, value: Any) -> Condition:
-    # JSON fields
-    if key == "data":
-        # nested dict
-        return value  # handled separately in builder
-
-    if key.startswith("data__"):
-        parts = key.split("__")
-        field = parts[1]
-        op = parts[2] if len(parts) > 2 else "eq"
-        return Condition(field, op, value, json=True)
-
-    # normal column
+    # operator split
     if "__" in key:
         field, op = key.split("__", 1)
     else:
         field, op = key, "eq"
-
-    return Condition(field, op, value, json=False)
+    return Condition(field=field, op=op, value=value)
 
 @dataclass
 class Query:

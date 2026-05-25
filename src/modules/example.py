@@ -10,10 +10,9 @@ class ExampleFlags(Flags):
     eg: str = flag("-", "an example of flags")
 
 def run(repo: CRepo, flags: ExampleFlags, logger: logging.Logger):
-    q = query(Record, protocol="dicom", data__result__scheme="tcp")
+    q = query(Record, protocol="dicom", **{"data.association.Msg.CalledAETitle": "ORTHANC"})
     for r in repo.query(q):
-        logger.info(r)
-        #repo.label(r["id"], "label")
+        repo.label(r["id"], "label")
 
 def example_classifier() -> Module:
     return (
