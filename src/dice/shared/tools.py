@@ -5,7 +5,6 @@ from typing import Optional
 from dice.shared.models import (
     Fingerprint,
     Host,
-    Fingerprint,
     HostTag,
 )
 
@@ -14,7 +13,7 @@ def new_fingerprint(
     module: str,
     host: str,
     record_id: int,
-    data: str,
+    data: dict,
     protocol: str
 ) -> Fingerprint:
     return Fingerprint(

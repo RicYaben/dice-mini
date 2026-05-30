@@ -127,6 +127,6 @@ def show(
     descriptors = []
     for mod in modules:
         if mod.desc.name in conf.data and (d:=conf.data.get(mod.desc.name)):
-            mod.desc.update_flags(**d)
+            mod.desc.flags.update(**d)
         descriptors.append(str(mod.desc))
     print('\n\n'.join(descriptors))

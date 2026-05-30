@@ -1,11 +1,11 @@
 from typing import Optional
-from sqlalchemy import MetaData
 from typing_extensions import Annotated
 
 from analysis.tools import new_anonymizer, new_remover
 from dice.cli.tools import load_repository
 from dice.internal.ast import make_parser
 from dice.internal.info import new_info
+from dice.shared.query import to_sql
 
 import ujson
 import typer
@@ -76,9 +76,10 @@ def search(
     # TODO: store mappings
     anonymize: Annotated[str, typer.Option()] = "",
     remove: Annotated[str, typer.Option()] = "",
-    fields: Annotated[str, typer.Option()] = "hosts,ports,services,labels,tags", 
+    fields: Annotated[str, typer.Option()] = "ports,services,labels,tags", 
     exclude: Annotated[str, typer.Option()] = "",
-) -> None:
+) -> None:    
+    flist = fields.split(",")
     parser = make_parser()
     qt = parser.to_sql(q)
 
@@ -89,10 +90,6 @@ def search(
     print(f"found {n} hosts")
     if not n:
         return
-
-    flist = fields.split(",")
-    if exclude:
-        flist = list(set(flist) - set(exclude.split(",")))
 
     procs = [normalize]
     if remove:
@@ -105,21 +102,17 @@ def search(
         anzr = new_anonymizer(clist)
         procs.append(anzr.anonymize)
 
-    rlist = remove.split(",")
+    if exclude:
+        flist = list(set(flist) - set(exclude.split(",")))
 
-    with repo.connect() as con:
-        info_b = new_info(flist)
-        meta = MetaData()
-        meta.reflect(bind=con)
+    info_b = new_info(flist)
+    for b in res.df(50_000):
+        ips = b["ip"].tolist() # type: ignore
+        qs = info_b.make(ips)
+        rows = repo.search(to_sql(qs)).all()
+        df = pd.DataFrame(rows)
 
-        for b in res.df(50_000):
-            ips = b["ip"].tolist() # type: ignore
-            iq = info_b.make(ips, meta.tables)
+        for p in procs:
+            df = p(df)
 
-            rows = con.execute(iq).mappings().all()
-            df = pd.DataFrame(rows)
-
-            for p in procs:
-                df = p(df)
-
-            print(df.to_json(orient="records", lines=True, force_ascii=False))
+        print(df.to_json(orient="records", lines=True, force_ascii=False))

@@ -38,7 +38,7 @@ def fingerprint(mod: str, host: str, record: int, data: dict, protocol: str) -> 
             mod,
             host,
             record,
-            ujson.dumps(data),
+            data,
             protocol
         )
 
@@ -74,8 +74,8 @@ class FRepo(BaseRepo):
 class CRepo(BaseRepo):
     def label(self, fp: int, lab: str) -> None:
         with self.repo.connect() as con:
-            l = label(con, fp, lab, cache=self.cache)
-            self.store(l)
+            lb = label(con, fp, lab, cache=self.cache)
+            self.store(lb)
 
 class TRepo(BaseRepo):
     def tag(self, host: str, name: str, comment: Optional[str] = None):

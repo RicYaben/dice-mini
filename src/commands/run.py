@@ -84,14 +84,14 @@ def run(
         conf = load_configuration(configuration)
         for m in cmods:
             if f:=conf.data[m.desc.name]:
-                m.desc.update_flags(**f)
+                m.desc.flags.update(**f)
 
     # override with kwargs
     if params:
         mappings: dict[str, dict] = ujson.loads(params)
         for name, kwargs in mappings.items():
             if mod:=next(filter(lambda x: x.desc.name == name, cmods)):
-                mod.desc.update_flags(**kwargs)
+                mod.desc.flags.update(**kwargs)
 
     repo = load_repository(db=database)
     engine.run(repo)
