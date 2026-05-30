@@ -83,7 +83,8 @@ def search(
     qt = parser.to_sql(q)
 
     repo = load_repository(db=database)
-    n, batches = repo.query(qt, limit=limit)
+    res = repo.search(qt, limit=limit)
+    n = res.count()
     
     print(f"found {n} hosts")
     if not n:
@@ -93,31 +94,32 @@ def search(
     if exclude:
         flist = list(set(flist) - set(exclude.split(",")))
 
-    clist = anonymize.split(",")
-    anzr = new_anonymizer(clist)
+    procs = [normalize]
+    if remove:
+        rlist = remove.split(",")
+        rm = new_remover(rlist)
+        procs.append(rm.remove)
+
+    if anonymize:
+        clist = anonymize.split(",")
+        anzr = new_anonymizer(clist)
+        procs.append(anzr.anonymize)
 
     rlist = remove.split(",")
-    rm = new_remover(rlist)
-
-    proc = (
-        normalize, 
-        rm.remove, 
-        anzr.anonymize
-    )
 
     with repo.connect() as con:
         info_b = new_info(flist)
         meta = MetaData()
         meta.reflect(bind=con)
 
-        for b in batches:
-            ips = b.ip.tolist()
+        for b in res.df(50_000):
+            ips = b["ip"].tolist() # type: ignore
             iq = info_b.make(ips, meta.tables)
 
             rows = con.execute(iq).mappings().all()
             df = pd.DataFrame(rows)
 
-            for p in proc:
+            for p in procs:
                 df = p(df)
 
             print(df.to_json(orient="records", lines=True, force_ascii=False))

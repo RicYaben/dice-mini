@@ -10,16 +10,16 @@ from .models import Fingerprint, FingerprintLabel, HostTag, Label, Model, Tag
 from .interfaces import Repository
 
 def label(con: Connection, fp: int, lab: str, cache: list[Label] = []) -> FingerprintLabel:
-    if l := next(filter(lambda x: x.name == lab, cache)):
-        assert(l.id)
-        return FingerprintLabel(fingerprint_id=fp, label_id=l.id)
+    if lb := next(filter(lambda x: x.name == lab, cache)):
+        assert(lb.id)
+        return FingerprintLabel(fingerprint_id=fp, label_id=lb.id)
 
     q = select(Label).where(Label.name == lab)
     slab = con.execute(q).scalar()
     assert(slab)
     assert(slab.id)
     cache.append(slab)
-    return FingerprintLabel(fingerprint_id=fp, label_id=l.id)
+    return FingerprintLabel(fingerprint_id=fp, label_id=lb.id)
 
 def tag(con: Connection, host: str, tag: str, comment: Optional[str], cache: list[Tag] = []) -> HostTag:
     if t := next(filter(lambda x: x.name == tag, cache)):

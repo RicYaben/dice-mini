@@ -5,8 +5,6 @@ from typing import Generator
 from collections.abc import Callable
 from pathlib import Path
 
-from pandas import json_normalize
-
 
 def walk(p: str):
     """

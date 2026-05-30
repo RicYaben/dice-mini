@@ -3,10 +3,6 @@ from sqlalchemy.sql import Select
 
 
 class InfoQueryBuilder:
-    """
-    Safe SQLAlchemy query builder (SQLite compatible)
-    """
-
     def __init__(self, fields: list[str]):
         fields = list(dict.fromkeys(fields))
 

@@ -2,7 +2,7 @@ from dice.sdk import Module
 from dice.shared import Flags, flag
 from dice.shared.models import Record
 from dice.shared.repository import CRepo
-from dice.experimental import query
+from dice.shared.query import query
 
 import logging
 

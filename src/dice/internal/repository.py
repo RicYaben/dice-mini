@@ -54,17 +54,18 @@ class Repository(R):
             policy(s, model, items)
             s.flush()
 
-    def query(self, q: str, bsize: int = DEFAULT_BSIZE) -> Generator[dict, None, None]:
+    def query(self, q: str, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None) -> Generator[dict, None, None]:
+        if limit:
+            q = f"{q} LIMIT {limit}"
+
         with self.connect() as c:
             res = c.execute(text(q))
             cols = [c[0] for c in res.cursor.description]  # type: ignore
 
-            while True:
-                if rows := res.fetchmany(bsize):
-                    for r in rows:
-                        yield dict(zip(cols, r))
-                    continue
-                break
+            while rows := res.fetchmany(bsize):
+                for r in rows:
+                    yield dict(zip(cols, r))
+                continue
 
     def querys(self, q: str) -> Generator[dict]:
         for batch in self.query(q):
@@ -96,7 +97,10 @@ class Repository(R):
         gen = self.queryb(q, bsize, norm, limit)
         return (d, gen)
 
-    def search(self, q: str) -> SearchResult:
+    def search(self, q: str, limit: Optional[int] = None) -> SearchResult:
+        if limit:
+            q += f" LIMIT {limit}"
+            
         view = f"tmp_{uuid4().hex}"
 
         con = self.connect()

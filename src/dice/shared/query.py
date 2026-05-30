@@ -1,89 +1,84 @@
-from typing import Any, Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Literal, Optional
+from sqlalchemy import select, func, and_
 from sqlalchemy.dialects import sqlite
 
 from dice.shared.models import Model
 
-def parse_clause(clause: str, value: Any) -> str:
-    # Operators
-    ops = {
-        "gt": ">",
-        "lt": "<",
-        "gte": ">=",
-        "lte": "<=",
-        "ne": "!=",
-        "eq": "=",
-        "in": "IN",
-        "bt": "BETWEEN",
-    }
+Op = Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "bt"]
 
-    # Extract field and operator
-    if "__" in clause:
-        field, op = clause.split("__", 1)
-        modifier = ops.get(op, "=")
+@dataclass(frozen=True)
+class Condition:
+    field: str
+    op: Op
+    value: Any
+    json: bool = False
+
+_OPERATORS: dict[Op, Callable[[Any, Any], Any]] = {
+    "eq": lambda expr, v: expr == v,
+    "ne": lambda expr, v: expr != v,
+    "gt": lambda expr, v: expr > v,
+    "gte": lambda expr, v: expr >= v,
+    "lt": lambda expr, v: expr < v,
+    "lte": lambda expr, v: expr <= v,
+    "in": lambda expr, v: expr.in_(v),
+    "bt": lambda expr, v: expr.between(v[0], v[1]),
+}
+
+def resolve_field(model, field: str):
+    if "." not in field:
+        return getattr(model, field)
+
+    root, *path = field.split(".")
+    col = getattr(model, root)
+
+    json_path = "$." + ".".join(path)
+    return func.json_extract(col, json_path)
+
+def compile_condition(model, c: Condition):
+    try:
+        expr = resolve_field(model, c.field)
+        op_func = _OPERATORS[c.op]
+        return op_func(expr, c.value)
+    except KeyError:
+        raise ValueError(f"Unknown operator: {c.op}")
+    except AttributeError as e:
+        raise ValueError(f"Invalid field: {c.field}") from e
+    
+def parse_condition(key: str, value: Any) -> Condition:
+    field, op = key.split("__", 1) if "__" in key else (key, "eq")
+    return Condition(field=field, op=op, value=value) # type: ignore
+
+@dataclass
+class Query:
+    model: Any
+    conditions: list[Condition] = field(default_factory=list)
+    fields: Optional[list[str]] = None
+
+    def where(self, **kwargs) -> "Query":
+        for k, v in kwargs.items():
+            self.conditions.append(parse_condition(k, v))
+        return self
+
+    def select(self, *fields: str) -> "Query":
+        self.fields = list(fields)
+        return self
+    
+def build_query(q: Query):
+    model = q.model
+
+    if q.fields:
+        columns = [resolve_field(model, f) for f in q.fields]
+        stmt = select(*columns)
     else:
-        field, modifier = clause, "="
+        stmt = select(model)
 
-    # BETWEEN
-    if modifier == "BETWEEN":
-        if not isinstance(value, (list, tuple)) or len(value) != 2:
-            raise ValueError("BETWEEN operator requires a 2-element list/tuple")
-        low, high = value
-        return f'"{field}" BETWEEN {low} AND {high}'
+    if q.conditions:
+        stmt = stmt.where(
+            and_(*[compile_condition(model, c) for c in q.conditions])
+        )
 
-    # IN
-    if isinstance(value, list):
-        vals = ", ".join(f"'{v}'" if isinstance(v, str) else str(v) for v in value)
-        return f'"{field}" IN ({vals})'
-
-    # String
-    if isinstance(value, str):
-        return f"\"{field}\" {modifier} '{value}'"
-
-    # Numeric
-    return f'"{field}" {modifier} {value}'
-
-def parse_json_clause(field: str, op: str, value: Any) -> str:
-    json_path = f"$.{field}"
-
-    # NULL handling
-    if value is None:
-        if op == "ne":
-            return f"json_extract(data, '{json_path}') IS NOT NULL"
-        if op == "eq":
-            return f"json_extract(data, '{json_path}') IS NULL"
-
-    # operators
-    ops = {
-        "gt": ">",
-        "lt": "<",
-        "gte": ">=",
-        "lte": "<=",
-        "ne": "!=",
-        "eq": "=",
-    }
-
-    sql_op = ops.get(op, "=")
-
-    if isinstance(value, str):
-        value = f"'{value}'"
-
-    return f"json_extract(data, '{json_path}') {sql_op} {value}"
-
-def with_clauses(q: str, data: Optional[dict], clauses: Optional[dict] = None) -> str:
-    qc = ""
-    if clauses:
-        qc = "WHERE " + " AND ".join(parse_clause(k, v) for k, v in clauses.items())
-    return q.format(clauses=qc)
-
-def query(model: Model, fields: list[str]=["*"], data: Optional[dict] = None, **clauses) -> str:
-    return with_clauses(
-        f"""
-        SELECT {",".join(fields)}
-        FROM {model.__tablename__}
-        {{clauses}}
-        """,
-        clauses,
-    )
+    return stmt
 
 def to_sql(stmt) -> str:
     return str(
@@ -92,3 +87,8 @@ def to_sql(stmt) -> str:
             compile_kwargs={"literal_binds": True},
         )
     )
+
+def query(model: type[Model], fields: Optional[list[str]] = None, **clauses) -> str:
+    q = Query(model, fields=fields).where(**clauses)
+    return to_sql(build_query(q))
+

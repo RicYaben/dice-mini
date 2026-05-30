@@ -7,7 +7,7 @@ from sqlalchemy import Connection, CursorResult, RowMapping
 from sqlmodel import text
 from tqdm import tqdm
 
-from dice.shared.query import query
+from dice.shared._query import query
 
 
 class SearchResult:
@@ -55,7 +55,7 @@ class SearchResult:
             f"SELECT COUNT(*) FROM {self.view}"
         ).scalar_one()
 
-    def where(self, fields=["*"], **clauses) -> "SearchResult":
+    def where(self, fields: list[str] =["*"], **clauses) -> "SearchResult":
         new_view = f"tmp_{uuid4().hex}"
 
         q = f"CREATE TEMP VIEW {new_view} AS {query(self.view, fields, **clauses)}"
