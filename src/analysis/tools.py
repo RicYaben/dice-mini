@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import pandas as pd
+import ujson
 
 def count_groups(df: pd.DataFrame, *cols: str) -> pd.DataFrame:
     "returns a grouped dataframe with counts using a list of columns. The order of the columns determines how the groups are formed"
@@ -53,66 +56,126 @@ def count_multi_groups(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     return combined.set_index(cols)[['count']]
 
 class Anonymizer:
-    def __init__(self, cols: list[str]) -> None:
+    def __init__(self, cols: list[str], mapping_file: str = "mappings.json") -> None:
         self.cols = cols
+        self.start = 1
+        self.mapping_file = Path(mapping_file)
+
+        # load existing mappings or initialize
+        if self.mapping_file.exists():
+            self.mappings = ujson.loads(self.mapping_file.read_text())
+        else:
+            self.mappings = {}
+
+    def _save(self):
+        self.mapping_file.write_text(ujson.dumps(self.mappings, indent=2))
 
     def anonymize(self, df: pd.DataFrame) -> pd.DataFrame:
         for col in self.cols:
             self._apply(df, col)
+
+        self._save()
         return df
+    
+    def _update_nested(self, row, base_col, nested_path, field_key, extract_fn):
+        obj = row[base_col]
+
+        if not isinstance(obj, dict):
+            return obj
+
+        if field_key not in self.mappings:
+            self.mappings[field_key] = {}
+
+        mapping = self.mappings[field_key]
+        next_id = max(mapping.values(), default=0) + 1
+
+        val = extract_fn(obj)
+
+        if val is None:
+            return obj
+
+        if val not in mapping:
+            mapping[val] = next_id
+            next_id += 1
+
+        # write back into nested structure
+        target = obj
+        for p in nested_path[:-1]:
+            target = target.setdefault(p, {})
+
+        target[nested_path[-1]] = mapping[val]
+
+        return obj
+
+    def _map_series(self, series: pd.Series, field_key: str) -> pd.Series:
+        if field_key not in self.mappings:
+            self.mappings[field_key] = {}
+
+        mapping = self.mappings[field_key]
+
+        new_value = max(mapping.values(), default=0) + 1
+
+        def map_value(v):
+            if pd.isna(v):
+                return v
+            if v in mapping:
+                return mapping[v]
+
+            nonlocal new_value
+            mapping[v] = new_value
+            new_value += 1
+            return mapping[v]
+
+        return series.map(map_value)
 
     def _apply(self, df: pd.DataFrame, col_path: str) -> None:
         parts = col_path.split(".")
-
         base_col = parts[0]
         nested_path = parts[1:]
+        field_key = col_path
 
         if not nested_path:
-            df[base_col] = self._map_series(df[base_col])
+            df[base_col] = self._map_series(df[base_col], field_key)
             return
 
-        # extract nested values
-        def extract(x):
-            for p in nested_path:
-                if isinstance(x, dict):
-                    x = x.get(p)
-                else:
-                    return None
-            return x
+        leaf = nested_path[-1]
 
-        extracted = df[base_col].apply(extract)
-
-        mapping = {
-            v: i
-            for i, v in enumerate(extracted.dropna().unique(), start=1)
-        }
-
-        # write back into original structure
         def update(row):
             obj = row[base_col]
+
             if not isinstance(obj, dict):
                 return obj
 
+            if field_key not in self.mappings:
+                self.mappings[field_key] = {}
+
+            mapping = self.mappings[field_key]
+            next_id = max(mapping.values(), default=0) + 1
+
+            # walk to value
+            val = obj
+            for p in nested_path:
+                if isinstance(val, dict):
+                    val = val.get(p)
+                else:
+                    return obj
+
+            if val is None:
+                return obj
+
+            if val not in mapping:
+                mapping[val] = next_id
+
+            # write back
             target = obj
-            for p in parts[1:-1]:
+            for p in nested_path[:-1]:
                 target = target.setdefault(p, {})
 
-            leaf = parts[-1]
-            val = obj.get(leaf)
-
-            if val in mapping:
-                obj[leaf] = mapping[val]
+            target[leaf] = mapping[val]
 
             return obj
 
         df[base_col] = df.apply(update, axis=1)
-
-    def _map_series(self, series: pd.Series) -> pd.Series:
-        mapping = {
-            v: i
-            for i, v in enumerate(series.dropna().unique(), start=1)
-        }
-        return series.map(mapping)
 
 def new_anonymizer(cols: list[str]) -> Anonymizer:
     return Anonymizer(cols)
