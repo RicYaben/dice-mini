@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import ujson
@@ -56,24 +57,32 @@ def count_multi_groups(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     return combined.set_index(cols)[['count']]
 
 class Anonymizer:
-    def __init__(self, cols: list[str], mapping_file: str = "mappings.json") -> None:
+    def __init__(self, cols: list[str], out: Optional[str] = None) -> None:
         self.cols = cols
-        self.start = 1
-        self.mapping_file = Path(mapping_file)
+        self.mappings = {}
+        self._out = None
+        self.out = out
 
-        # load existing mappings or initialize
-        if self.mapping_file.exists():
-            self.mappings = ujson.loads(self.mapping_file.read_text())
-        else:
-            self.mappings = {}
+        if (o:=self.out) and o.exists():
+            self.mappings = ujson.loads(o.read_text())
+            return
+        
+    @property    
+    def out(self):
+        return self._out
+    
+    @out.setter
+    def out(self, fpath: Optional[str]) -> None | Path:
+        if fpath:
+            self._out = Path(fpath)
 
     def _save(self):
-        self.mapping_file.write_text(ujson.dumps(self.mappings, indent=2))
+        if self.out:
+            self.out.write_text(ujson.dumps(self.mappings, indent=2))
 
     def anonymize(self, df: pd.DataFrame) -> pd.DataFrame:
         for col in self.cols:
             self._apply(df, col)
-
         self._save()
         return df
     
@@ -177,8 +186,8 @@ class Anonymizer:
 
         df[base_col] = df.apply(update, axis=1)
 
-def new_anonymizer(cols: list[str]) -> Anonymizer:
-    return Anonymizer(cols)
+def new_anonymizer(cols: list[str], out: Optional[str]) -> Anonymizer:
+    return Anonymizer(cols, out)
 
 class FieldRemover:
     def __init__(self, paths: list[str]) -> None:

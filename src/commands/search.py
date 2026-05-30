@@ -75,6 +75,7 @@ def search(
     ),
     # TODO: store mappings
     anonymize: Annotated[str, typer.Option()] = "",
+    mappings: Annotated[Optional[str], typer.Option()] = None,
     remove: Annotated[str, typer.Option()] = "",
     fields: Annotated[str, typer.Option()] = "ports,services,labels,tags", 
     exclude: Annotated[str, typer.Option()] = "",
@@ -99,7 +100,7 @@ def search(
 
     if anonymize:
         clist = anonymize.split(",")
-        anzr = new_anonymizer(clist)
+        anzr = new_anonymizer(clist, mappings)
         procs.append(anzr.anonymize)
 
     if exclude:
