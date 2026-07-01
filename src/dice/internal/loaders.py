@@ -1,9 +1,9 @@
-import pandas as pd
 import glob
-
-from typing import Generator
 from collections.abc import Callable
 from pathlib import Path
+from typing import Generator
+
+import pandas as pd
 
 
 def walk(p: str):
@@ -30,6 +30,7 @@ def walk(p: str):
         # Direct file path
         yield path
 
+
 def extract_protocol_data(d: dict) -> tuple[str, dict]:
     try:
         first_obj: dict = list(d.values())[0]
@@ -46,7 +47,7 @@ def zgrab2_loader_normalizer(df: pd.DataFrame) -> pd.DataFrame:
     df[["protocol", "data"]] = df["data"].apply(
         lambda raw: pd.Series(extract_protocol_data(raw))
     )
-    df = df.rename({'ip': 'host'}, axis=1)
+    df = df.rename({"ip": "host"}, axis=1)
 
     if "port" not in df.columns:
         df["port"] = -1

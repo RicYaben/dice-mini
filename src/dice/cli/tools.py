@@ -1,7 +1,7 @@
-from dice.internal.middlewares import add_missing_hosts, resume_cursors
-from dice.internal.repository import Repository, new_repository
 from dice.internal.database import new_connector
 from dice.internal.health import new_health_monitor
+from dice.internal.middlewares import add_missing_hosts, resume_cursors
+from dice.internal.repository import Repository, new_repository
 
 
 def load_repository(

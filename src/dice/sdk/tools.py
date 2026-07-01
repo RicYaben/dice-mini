@@ -1,12 +1,11 @@
+import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from dice.shared.flags import Flags
 from dice.shared.models import Label, Tag
 from dice.shared.modules import ModuleDescriptor, Runner, do_nothing
-from dice.shared.flags import Flags
 from dice.shared.repository import BaseRepo
-
-import logging
 
 
 def wrap_runner(msg: str, runner: Runner) -> Runner:
@@ -19,12 +18,14 @@ def wrap_runner(msg: str, runner: Runner) -> Runner:
 
     return wrapper
 
+
 @dataclass
 class Service:
     name: str
     vendor: Optional[str]
     version: Optional[str]
     cpe: Optional[str]
+
 
 @dataclass
 class Module(ModuleDescriptor):

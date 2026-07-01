@@ -1,14 +1,14 @@
-import pandas as pd
-
 from typing import Optional
+
+import pandas as pd
 from sqlalchemy import Connection, MetaData, delete
 from sqlmodel import (
     JSON,
     Column,
     Field,
     Relationship,
-    SQLModel,
     Session,
+    SQLModel,
     Table,
     UniqueConstraint,
     select,
@@ -54,6 +54,7 @@ class Resource(Model, table=True):
             stmt = delete(tab).where(tab.c.resource_id == self.id)
             s.exec(stmt)
 
+
 class Record(Model, table=True):
     host: Optional[str] = Field(default=None, foreign_key="host.ip")
     source: Optional[str] = Field(default=None, foreign_key="source.name")
@@ -64,6 +65,7 @@ class Record(Model, table=True):
     protocol: Optional[str] = None
 
     __table_args__ = (UniqueConstraint("resource_id", "host"),)
+
 
 class Cursor(Model, table=True):
     resource_id: int = Field(default=None, foreign_key="resource.id", unique=True)
@@ -91,7 +93,9 @@ class Host(Model, table=True):
 class Fingerprint(Model, table=True):
     host: Optional[str] = Field(default=None, foreign_key="host.ip")
     record_id: Optional[int] = Field(default=None, foreign_key="record.id")
-    resource_id: Optional[int] = Field(default=None, foreign_key="resource.id") # TODO: why do we need this?
+    resource_id: Optional[int] = Field(
+        default=None, foreign_key="resource.id"
+    )  # TODO: why do we need this?
 
     data: dict = Field(sa_column=Column(JSON))
     module_name: str

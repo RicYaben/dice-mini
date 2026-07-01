@@ -1,8 +1,9 @@
 from sqlite3 import IntegrityError
 from typing import Any, Iterable, Literal, Optional, Sequence, Type
+
 from sqlalchemy import Connection, Engine, Row
-from sqlmodel import SQLModel, Session, select, insert, create_engine
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlmodel import Session, SQLModel, create_engine, insert, select
 
 from dice.shared.models import Model
 

@@ -1,26 +1,25 @@
 import logging
 
-from tqdm import tqdm
 from sqlmodel import exists, select
+from tqdm import tqdm
+
+from dice.shared.models import Cursor, Host, Record, Resource
 
 from .config import DEFAULT_BSIZE
 from .database import insert_or_ignore
 from .events import Event
-from .repository import Repository, query_batch, query_count
 from .health import HealthCheck
+from .repository import Repository, query_batch, query_count
 from .resources import new_resourcerer
-
-from dice.shared.models import Cursor, Host, Record, Resource
 
 logger = logging.getLogger(__name__)
 
-def add_hosts_from_records_table(
-    repo: Repository
-) -> None:
+
+def add_hosts_from_records_table(repo: Repository) -> None:
     with repo.connect() as con:
         q = str(
-            select(Record.host.distinct().label("ip")) # type: ignore
-            .where(~exists().where(Record.host == Host.ip)) # type: ignore
+            select(Record.host.distinct().label("ip"))  # type: ignore
+            .where(~exists().where(Record.host == Host.ip))  # type: ignore
             .compile(con)
         )
 
@@ -47,6 +46,7 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
             add_hosts_from_records_table(repo)
         elif t == Record.__tablename__:
             add_hosts_from_records_table(repo)
+
     return hc
 
 

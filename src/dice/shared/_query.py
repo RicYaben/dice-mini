@@ -1,7 +1,9 @@
 from typing import Any, Optional
+
 from sqlalchemy.dialects import sqlite
 
 from dice.shared.models import Model
+
 
 def parse_clause(clause: str, value: Any) -> str:
     # Operators
@@ -42,6 +44,7 @@ def parse_clause(clause: str, value: Any) -> str:
     # Numeric
     return f'"{field}" {modifier} {value}'
 
+
 def parse_json_clause(field: str, op: str, value: Any) -> str:
     json_path = f"$.{field}"
 
@@ -69,16 +72,18 @@ def parse_json_clause(field: str, op: str, value: Any) -> str:
 
     return f"json_extract(data, '{json_path}') {sql_op} {value}"
 
+
 def with_clauses(q: str, clauses: Optional[dict] = None) -> str:
     qc = ""
     if clauses:
         qc = "WHERE " + " AND ".join(parse_clause(k, v) for k, v in clauses.items())
     return q.format(clauses=qc)
 
-def query(table: Model | str, fields: list[str]=["*"], **clauses) -> str:
+
+def query(table: Model | str, fields: list[str] = ["*"], **clauses) -> str:
     if isinstance(table, Model):
         table = table.__tablename__
-        
+
     return with_clauses(
         f"""
         SELECT {",".join(fields)}
@@ -87,6 +92,7 @@ def query(table: Model | str, fields: list[str]=["*"], **clauses) -> str:
         """,
         clauses,
     )
+
 
 def to_sql(stmt) -> str:
     return str(

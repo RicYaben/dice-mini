@@ -1,21 +1,22 @@
 import fnmatch
 import logging
-
 from dataclasses import dataclass
+
 from tabulate import tabulate
 
-from .repository import Repository
-from .signatures import Signature, new_signature
+from dice.shared.modules import MFACTORY, ModuleType
+
 from .modules import (
     Module,
     ModuleRegistry,
 )
-
-from dice.shared.modules import MFACTORY, ModuleType
+from .repository import Repository
+from .signatures import Signature, new_signature
 
 logger = logging.getLogger(__name__)
 
 
+# TODO: we can make components and signatures a unique interface object with children
 @dataclass
 class Component:
     # type of component: classifier, fingerprinter, scanner...

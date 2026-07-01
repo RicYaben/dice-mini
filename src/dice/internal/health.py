@@ -7,15 +7,17 @@ logger = logging.getLogger(__name__)
 
 type HealthCheck = Callable[[Event], None]
 
+
 class HealthMonitor:
-    def __init__(self,
+    def __init__(
+        self,
         on_init: list[HealthCheck],
         on_synchronize: list[HealthCheck],
     ) -> None:
-        self._on_init=on_init
-        self._on_synchronize=on_synchronize
+        self._on_init = on_init
+        self._on_synchronize = on_synchronize
 
-    def initialize(self): 
+    def initialize(self):
         self.load(new_event(EventType.LOAD))
 
     def load(self, e: Event):
@@ -33,6 +35,8 @@ class HealthMonitor:
         e = new_event(EventType.SANITY)
         self.synchronize(e)
 
-def new_health_monitor(init: list[HealthCheck]=[], sync: list[HealthCheck]=[]) -> HealthMonitor:
+
+def new_health_monitor(
+    init: list[HealthCheck] = [], sync: list[HealthCheck] = []
+) -> HealthMonitor:
     return HealthMonitor(init, sync)
-    

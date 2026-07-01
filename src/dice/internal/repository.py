@@ -1,21 +1,20 @@
-import pandas as pd
-import warnings
 import logging
-
-from uuid import uuid4
+import warnings
 from typing import Generator, Optional, Sequence
-from sqlmodel import Session, text
-from sqlalchemy import Connection
+from uuid import uuid4
 
-from .health import HealthMonitor
+import pandas as pd
+from sqlalchemy import Connection
+from sqlmodel import Session, text
+
+from dice.shared.interfaces import Repository as R
+from dice.shared.interfaces import T
+from dice.shared.result import SearchResult
+
 from .config import DEFAULT_BSIZE
 from .database import Connector, insert_or_ignore
+from .health import HealthMonitor
 from .helpers import normalize_data
-
-from dice.shared.interfaces import T
-from dice.shared.interfaces import Repository as R
-
-from dice.shared.result import SearchResult
 
 warnings.simplefilter(action="ignore", category=UserWarning)
 
@@ -54,7 +53,9 @@ class Repository(R):
             policy(s, model, items)
             s.flush()
 
-    def query(self, q: str, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None) -> Generator[dict, None, None]:
+    def query(
+        self, q: str, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None
+    ) -> Generator[dict, None, None]:
         if limit:
             q = f"{q} LIMIT {limit}"
 
@@ -100,7 +101,7 @@ class Repository(R):
     def search(self, q: str, limit: Optional[int] = None) -> SearchResult:
         if limit:
             q += f" LIMIT {limit}"
-            
+
         view = f"tmp_{uuid4().hex}"
 
         con = self.connect()

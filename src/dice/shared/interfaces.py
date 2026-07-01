@@ -1,12 +1,12 @@
 from typing import Generator, Protocol, TypeVar
 
 from sqlalchemy import Connection
-from sqlmodel import SQLModel, Session
+from sqlmodel import Session, SQLModel
 
 from dice.shared.result import SearchResult
 
-
 T = TypeVar("T", bound=SQLModel)
+
 
 class Repository(Protocol):
     def query(self, q: str, bsize: int = 50_000) -> Generator[dict]: ...

@@ -1,11 +1,9 @@
 import typer
-
 from typing_extensions import Annotated
 
-from dice.internal.repository import new_repository
-from dice.internal.database import new_connector
-
 from analysis.comparing import compare
+from dice.internal.database import new_connector
+from dice.internal.repository import new_repository
 
 compare_app = typer.Typer(help="Compare two datasets")
 

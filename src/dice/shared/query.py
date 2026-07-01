@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Optional
-from sqlalchemy import select, func, and_
+
+from sqlalchemy import and_, func, select
 from sqlalchemy.dialects import sqlite
 
 from dice.shared.models import Model
 
 Op = Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "bt"]
+
 
 @dataclass(frozen=True)
 class Condition:
@@ -13,6 +15,7 @@ class Condition:
     op: Op
     value: Any
     json: bool = False
+
 
 _OPERATORS: dict[Op, Callable[[Any, Any], Any]] = {
     "eq": lambda expr, v: expr == v,
@@ -25,6 +28,7 @@ _OPERATORS: dict[Op, Callable[[Any, Any], Any]] = {
     "bt": lambda expr, v: expr.between(v[0], v[1]),
 }
 
+
 def resolve_field(model, field: str):
     if "." not in field:
         return getattr(model, field)
@@ -35,6 +39,7 @@ def resolve_field(model, field: str):
     json_path = "$." + ".".join(path)
     return func.json_extract(col, json_path)
 
+
 def compile_condition(model, c: Condition):
     try:
         expr = resolve_field(model, c.field)
@@ -44,10 +49,12 @@ def compile_condition(model, c: Condition):
         raise ValueError(f"Unknown operator: {c.op}")
     except AttributeError as e:
         raise ValueError(f"Invalid field: {c.field}") from e
-    
+
+
 def parse_condition(key: str, value: Any) -> Condition:
     field, op = key.split("__", 1) if "__" in key else (key, "eq")
-    return Condition(field=field, op=op, value=value) # type: ignore
+    return Condition(field=field, op=op, value=value)  # type: ignore
+
 
 @dataclass
 class Query:
@@ -63,7 +70,8 @@ class Query:
     def select(self, *fields: str) -> "Query":
         self.fields = list(fields)
         return self
-    
+
+
 def build_query(q: Query):
     model = q.model
 
@@ -74,11 +82,10 @@ def build_query(q: Query):
         stmt = select(model)
 
     if q.conditions:
-        stmt = stmt.where(
-            and_(*[compile_condition(model, c) for c in q.conditions])
-        )
+        stmt = stmt.where(and_(*[compile_condition(model, c) for c in q.conditions]))
 
     return stmt
+
 
 def to_sql(stmt) -> str:
     return str(
@@ -88,7 +95,9 @@ def to_sql(stmt) -> str:
         )
     )
 
-def query(model: type[Model], fields: Optional[list[str]] = None, **clauses) -> str:
+
+def query(
+    model: type[Model], fields: Optional[list[str]] = None, **clauses: dict
+) -> str:
     q = Query(model, fields=fields).where(**clauses)
     return to_sql(build_query(q))
-

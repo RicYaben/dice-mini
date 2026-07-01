@@ -1,13 +1,13 @@
-from dataclasses import dataclass, field
+import logging
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Generic, Optional, Protocol, TypeVar, cast
 
 from .flags import Flags
-from .models import Tag, Label
+from .models import Label, Tag
 from .repository import BaseRepo
 
-import logging
 
 @dataclass(frozen=True)
 class ModuleType:
@@ -17,7 +17,7 @@ class ModuleType:
 
     def alias_name(self) -> str:
         return self.alias or self.name
-    
+
     def __str__(self) -> str:
         return self.name
 
@@ -42,9 +42,10 @@ class ModuleFactory:
         # dedupe by .command
         ret = []
         for v in self._lookup.values():
-            if v not in ret: 
+            if v not in ret:
                 ret.append(v)
         return ret
+
 
 class ModuleEnum(Enum):
     SCANNER = ModuleType(command="scan", name="scanner", alias="s")
@@ -52,15 +53,20 @@ class ModuleEnum(Enum):
     FINGERPRINTER = ModuleType(command="fingerprint", name="fingerprinter", alias="f")
     TAGGER = ModuleType(command="tag", name="tag", alias="t")
 
+
 MFACTORY = ModuleFactory()
 for m in ModuleEnum:
     MFACTORY.register(m.value)
 
+
 def find_module(mod: str) -> ModuleType:
     return MFACTORY.get(mod)
 
+
 R = TypeVar("R", bound=BaseRepo)
 F = TypeVar("F", bound=Flags)
+
+
 class Runner(Protocol[R, F]):
     def __call__(
         self,
@@ -69,15 +75,17 @@ class Runner(Protocol[R, F]):
         logger: logging.Logger,
     ) -> None: ...
 
+
 def do_nothing(repo: BaseRepo, flags: Flags, logger: logging.Logger) -> None:
     return
+
 
 @dataclass
 class ModuleDescriptor(Generic[R, F]):
     t: str
     name: str
     description: Optional[str] = None
-    flags: type[F] = field( default=cast(type[F], Flags))
+    flags: type[F] = field(default=cast(type[F], Flags))
     labels: list["Label"] = field(default_factory=list)
     tags: list["Tag"] = field(default_factory=list)
 
@@ -115,7 +123,7 @@ class ModuleDescriptor(Generic[R, F]):
         if not self._flags:
             raise Exception("module not initialized")
         return self._flags
-    
+
     @rflags.setter
     def rflags(self, f: type[F]) -> None:
         self._flags = f()
@@ -149,9 +157,7 @@ class ModuleDescriptor(Generic[R, F]):
             lines.append("flags:")
 
             for name, f in meta.items():
-                lines.append(
-                    f"--{name}\t{f.value}\t{f.description}"
-                )
+                lines.append(f"--{name}\t{f.value}\t{f.description}")
 
         # TODO: labels and tags would go nice into a table
         if self.labels:
@@ -169,6 +175,7 @@ class ModuleDescriptor(Generic[R, F]):
                 lines.append(f"-{t.name}\t{desc}")
 
         return "\n".join(lines)
+
 
 # TODO: this is pagination with a bar
 # def zgrab2_handler(

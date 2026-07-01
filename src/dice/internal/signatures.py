@@ -1,11 +1,10 @@
+import logging
 from dataclasses import dataclass
-
-from .repository import Repository
-from .modules import Module
 
 from dice.shared.modules import ModuleType
 
-import logging
+from .modules import Module
+from .repository import Repository
 
 logger = logging.getLogger(__name__)
 

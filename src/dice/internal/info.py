@@ -1,7 +1,7 @@
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.sql import Select
 
-from dice.shared.models import Host, Fingerprint, Label, FingerprintLabel, HostTag, Tag
+from dice.shared.models import Fingerprint, FingerprintLabel, Host, HostTag, Label, Tag
 
 
 class InfoQueryBuilder:
@@ -15,8 +15,8 @@ class InfoQueryBuilder:
 
     def make(self, hosts: list[str]) -> Select:
         hosts_cte = (
-            select(Host.ip, Host.prefix, Host.asn) # type: ignore
-            .where(Host.ip.in_(hosts)) # type: ignore
+            select(Host.ip, Host.prefix, Host.asn)  # type: ignore
+            .where(Host.ip.in_(hosts))  # type: ignore
             .cte("h")
         )
 
@@ -41,7 +41,7 @@ class InfoQueryBuilder:
                 select(
                     FingerprintLabel.fingerprint_id,
                     func.group_concat(Label.name, ",").label("labels"),
-                ) # type: ignore
+                )  # type: ignore
                 .join(Label, Label.id == FingerprintLabel.label_id)
                 .group_by(FingerprintLabel.fingerprint_id)
                 .subquery()

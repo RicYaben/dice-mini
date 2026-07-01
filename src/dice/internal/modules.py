@@ -1,18 +1,18 @@
+import fnmatch
+import logging
+import pathlib
+import sys
 from dataclasses import dataclass
 from importlib import import_module
 from importlib.metadata import entry_points
 
-import pathlib
-import fnmatch
-import sys
-import logging
+from dice.shared.modules import ModuleDescriptor, ModuleEnum, ModuleType, find_module
+from dice.shared.repository import BaseRepo, CRepo, FRepo, TRepo
 
 from .repository import Repository
 
-from dice.shared.repository import BaseRepo, CRepo, FRepo, TRepo
-from dice.shared.modules import ModuleDescriptor, ModuleEnum, ModuleType, find_module
-
 logger = logging.getLogger(__name__)
+
 
 def make_repository(base: Repository, name: str, t: ModuleType) -> BaseRepo:
     r = None
@@ -26,6 +26,7 @@ def make_repository(base: Repository, name: str, t: ModuleType) -> BaseRepo:
         case _:
             r = BaseRepo
     return r(base, name)
+
 
 @dataclass
 class Module:

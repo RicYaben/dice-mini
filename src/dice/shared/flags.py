@@ -7,8 +7,10 @@ class Flag:
     value: Any
     description: str = ""
 
-def flag(default: Any, description: str="") -> Any:
+
+def flag(default: Any, description: str = "") -> Any:
     return Flag(default, description)
+
 
 class FlagsMeta(type):
     def __new__(mcls, name, bases, ns):
@@ -16,7 +18,7 @@ class FlagsMeta(type):
 
         meta = {}
 
-        for k, typ in annotations.items():
+        for k, _ in annotations.items():
             val = ns.get(k)
 
             if isinstance(val, Flag):
@@ -28,7 +30,7 @@ class FlagsMeta(type):
 
         ns["__meta__"] = meta
         return super().__new__(mcls, name, bases, ns)
-    
+
 
 class Flags(metaclass=FlagsMeta):
     __meta__: dict[str, Flag]

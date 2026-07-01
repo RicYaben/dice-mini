@@ -1,13 +1,14 @@
-from tabulate import tabulate
+import logging
 
-from .repository import Repository
-from .components import Component
+from tabulate import tabulate
 
 from dice.shared.modules import MFACTORY
 
-import logging
+from .components import Component
+from .repository import Repository
 
 logger = logging.getLogger(__name__)
+
 
 class Engine:
     def __init__(self, comps: list[Component]) -> None:

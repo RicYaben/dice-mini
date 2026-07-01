@@ -1,7 +1,8 @@
-import ujson
-import pandas as pd
-
 from typing import Any, Callable
+
+import pandas as pd
+import ujson
+
 from .config import DATA_PREFIX
 
 
@@ -56,7 +57,9 @@ def normalize_fingerprints(df: pd.DataFrame) -> pd.DataFrame:
     return normalize_data(df, DATA_PREFIX)
 
 
-def get_record_field(r, field: str, default: Any = None, prefix: str = DATA_PREFIX) -> Any:
+def get_record_field(
+    r, field: str, default: Any = None, prefix: str = DATA_PREFIX
+) -> Any:
     v = r.get(prefix + field, default)
 
     if isinstance(v, (list, tuple)):

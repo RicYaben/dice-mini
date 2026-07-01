@@ -1,4 +1,8 @@
 from typing import Optional
+
+import pandas as pd
+import typer
+import ujson
 from typing_extensions import Annotated
 
 from analysis.tools import new_anonymizer, new_remover
@@ -7,11 +11,8 @@ from dice.internal.ast import make_parser
 from dice.internal.info import new_info
 from dice.shared.query import to_sql
 
-import ujson
-import typer
-import pandas as pd
-
 search_app = typer.Typer(help="Query the database")
+
 
 def normalize_services(services):
     if not services:
@@ -43,18 +44,18 @@ def normalize_services(services):
 
     return out
 
+
 def normalize(df: pd.DataFrame) -> pd.DataFrame:
     if "services" in df.columns:
         df["services"] = df["services"].apply(normalize_services)
     return df
 
+
 def anonymize_col(df: pd.DataFrame, col: str):
-    mapping = {
-        v: i
-        for i, v in enumerate(df[col].unique(), start=1)
-    }
+    mapping = {v: i for i, v in enumerate(df[col].unique(), start=1)}
 
     df[col] = df[col].map(mapping)
+
 
 @search_app.command()
 def search(
@@ -62,24 +63,20 @@ def search(
         "",
         "-q",
         "--query",
-    ), 
+    ),
     database: Optional[str] = typer.Option(
         None,
         "-db",
         "--database",
-    ), 
-    limit: Optional[int] = typer.Option(
-        None,
-        "-l",
-        "--limit"
     ),
+    limit: Optional[int] = typer.Option(None, "-l", "--limit"),
     # TODO: store mappings
     anonymize: Annotated[str, typer.Option()] = "",
     mappings: Annotated[Optional[str], typer.Option()] = None,
     remove: Annotated[str, typer.Option()] = "",
-    fields: Annotated[str, typer.Option()] = "ports,services,labels,tags", 
+    fields: Annotated[str, typer.Option()] = "ports,services,labels,tags",
     exclude: Annotated[str, typer.Option()] = "",
-) -> None:    
+) -> None:
     flist = fields.split(",")
     parser = make_parser()
     qt = parser.to_sql(q)
@@ -87,7 +84,7 @@ def search(
     repo = load_repository(db=database)
     res = repo.search(qt, limit=limit)
     n = res.count()
-    
+
     print(f"found {n} hosts")
     if not n:
         return
@@ -108,7 +105,7 @@ def search(
 
     info_b = new_info(flist)
     for b in res.df(50_000):
-        ips = b["ip"].tolist() # type: ignore
+        ips = b["ip"].tolist()  # type: ignore
         qs = info_b.make(ips)
         rows = repo.search(to_sql(qs)).all()
         df = pd.DataFrame(rows)

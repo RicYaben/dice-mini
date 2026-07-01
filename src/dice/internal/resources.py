@@ -1,19 +1,19 @@
+import logging
+import os
 from itertools import chain
 from typing import Generator, Optional
+
+import pandas as pd
 from sqlalchemy import Connection, select
 from sqlmodel import Session
 from tqdm import tqdm
 
+from dice.shared.models import Cursor, Record, Resource, Source
+
 from .config import DEFAULT_BSIZE
 from .database import get_or_create
-from .loaders import read_resource, get_loader_normalizer
+from .loaders import get_loader_normalizer, read_resource
 from .repository import Repository
-
-from dice.shared.models import Record, Resource, Cursor, Source
-
-import pandas as pd
-import logging
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class Sourcerer:
             return self._ic
 
         if self.empty():
-            raise ValueError(f"unable to get columns: empty source")
+            raise ValueError("unable to get columns: empty source")
 
         p = self.peek
         assert isinstance(p, pd.DataFrame)
@@ -183,11 +183,12 @@ def add_resource(
             rdf = [
                 Record(
                     source=source.name,
-                    resource_id=res.id, 
-                    host=r["host"], 
-                    data=r["data"], 
-                    port=r["port"], 
-                    protocol=r["protocol"]
-                ) for _, r in c.iterrows()
+                    resource_id=res.id,
+                    host=r["host"],
+                    data=r["data"],
+                    port=r["port"],
+                    protocol=r["protocol"],
+                )
+                for _, r in c.iterrows()
             ]
             repo.insert(rdf, con=con)
