@@ -1,7 +1,6 @@
 import glob
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import Generator
 
 import pandas as pd
 
@@ -33,7 +32,7 @@ def walk(p: str):
 
 def extract_protocol_data(d: dict) -> tuple[str, dict]:
     try:
-        first_obj: dict = list(d.values())[0]
+        first_obj: dict = next(iter(d.values()))
         protocol: str = first_obj.get("protocol", "-")
         first_obj.update(first_obj["result"])
         del first_obj["result"]
@@ -64,15 +63,22 @@ def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]
 
 def jsonl_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
     # NOTE: engine pyarrow does not support chunking
-    for c in pd.read_json(
-        p, lines=True, dtype=True, convert_dates=False, chunksize=batch_size
-    ):
-        yield c
+    reader = pd.read_json(
+        p,
+        lines=True,
+        dtype=True,
+        convert_dates=False,
+        chunksize=batch_size,
+        encoding="utf-8",
+        encoding_errors="ignore",
+    )
+
+    yield from reader
 
 
 def csv_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
-    for c in pd.read_csv(p, chunksize=batch_size):
-        yield c
+    reader = pd.read_csv(p, chunksize=batch_size)
+    yield from reader
 
 
 def get_reader(ext: str):

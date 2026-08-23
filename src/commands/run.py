@@ -1,5 +1,3 @@
-from typing import Optional
-
 import typer
 import ujson
 
@@ -23,21 +21,21 @@ run_app = typer.Typer(help="DICE mini runner")
 
 @run_app.command()
 def run(
-    command: Optional[str] = typer.Argument(None, help="components to use"),
-    components: Optional[str] = typer.Option(
+    command: str | None = typer.Argument(None, help="components to use"),
+    components: str | None = typer.Option(
         None, "-C", "--components", help="list of components to load"
     ),
     modules: str = typer.Option("*", "-M", "--modules", help="modules to load"),
-    database: Optional[str] = typer.Option(
+    database: str | None = typer.Option(
         None, "-db", "--database", help="path to database"
     ),
-    plugins: Optional[str] = typer.Option(
+    plugins: str | None = typer.Option(
         None, "-p", "--plugins", help="Load module registries as plugins"
     ),
-    configuration: Optional[str] = typer.Option(
+    configuration: str | None = typer.Option(
         None, "-c", "--configuration", help="Load a configuration"
     ),
-    params: Optional[str] = typer.Option(
+    params: str | None = typer.Option(
         None, "--params", help="Parameters to set, as JSON"
     ),
 ):
@@ -78,8 +76,10 @@ def run(
                 mod.desc.flags.update(**kwargs)
 
     repo = load_repository(db=database)
-    engine.run(repo)
-
+    # TODO: ideally, the run returns some kind of summary report
+    # so we can print it here
+    res = engine.run(repo)
+    # print(res.summary())
 
 @run_app.command()
 def info(
@@ -118,35 +118,38 @@ def info(
 
 
 @run_app.command()
-def spec(
+def recipe(
     id: str = typer.Argument(help="Identifier"),
-    remote: Optional[str] = typer.Option(
+    # TODO: add a list of trusted remote locations and a flag to get out of those
+    remote: str | None = typer.Option(
         None, "-r", "--remote", help="Fetch specs from a remote location"
     ),
-    database: Optional[str] = typer.Option(
+    database: str | None = typer.Option(
         None, "-db", "--database", help="Path to database"
     ),
-    plugins: Optional[str] = typer.Option(
+    plugins: str | None = typer.Option(
         None, "-p", "--plugins", help="Load module registries as plugins"
     ),
-    configuration: Optional[str] = typer.Option(
+    configuration: str | None = typer.Option(
         None, "-c", "--configuration", help="Load a configuration"
     ),
-    params: Optional[str] = typer.Option(
+    params: str | None = typer.Option(
         None, "--params", help="Parameters to set, as JSON"
     ),
 ) -> None:
-    spec = load_specification(id, remote)
-    if not spec:
+    # TODO: we load the recipe from either local or a remote location.
+    # a recipe is a specification of how a scan should be performed.
+    recipe = load_recipe(id, remote)
+    if not recipe:
         return
 
     if configuration:
         conf = load_configuration(configuration)
-        spec.update(conf)
+        recipe.update(conf)
 
     if params:
         mappings: dict[str, dict] = ujson.loads(params)
-        spec.update(mappings)
+        recipe.update(mappings)
 
     repo = load_repository(db=database)
-    spec.start(repo)
+    recipe.start(repo)

@@ -1,6 +1,6 @@
-from tomlkit import parse, dumps, table, document
-
 import logging
+
+from tomlkit import document, dumps, parse, table
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -9,12 +9,13 @@ logging.basicConfig(level=logging.INFO)
 DATA_PREFIX: str = "data_"
 DEFAULT_BSIZE: int = 50_000
 
+
 class Configuration:
     def __init__(self, fpath: str | None) -> None:
         if not fpath:
             self.data = document()
             return
-            
+
         with open(fpath, "+r", encoding="utf-8") as f:
             self.data = parse(f.read())
 
@@ -26,6 +27,7 @@ class Configuration:
     def dump(self, fpath: str) -> None:
         with open(fpath, "w", encoding="utf-8") as f:
             f.write(dumps(self.data))
+
 
 def load_configuration(fpath: str | None) -> Configuration:
     return Configuration(fpath)

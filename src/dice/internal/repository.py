@@ -1,6 +1,6 @@
 import logging
 import warnings
-from typing import Generator, Optional, Sequence
+from collections.abc import Generator, Sequence
 from uuid import uuid4
 
 import pandas as pd
@@ -54,7 +54,7 @@ class Repository(R):
             s.flush()
 
     def query(
-        self, q: str, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None
+        self, q: str, bsize: int = DEFAULT_BSIZE, limit: int | None = None
     ) -> Generator[dict, None, None]:
         if limit:
             q = f"{q} LIMIT {limit}"
@@ -78,7 +78,7 @@ class Repository(R):
         q: str,
         bsize: int = DEFAULT_BSIZE,
         norm=normalize_data,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> Generator[pd.DataFrame, None, None]:
         with self.connect() as con:
             norm = norm if norm else lambda x: x
@@ -91,14 +91,14 @@ class Repository(R):
         q: str,
         bsize: int = DEFAULT_BSIZE,
         norm=normalize_data,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
         with self.connect() as con:
             d = query_count(q, con, limit)
         gen = self.queryb(q, bsize, norm, limit)
         return (d, gen)
 
-    def search(self, q: str, limit: Optional[int] = None) -> SearchResult:
+    def search(self, q: str, limit: int | None = None) -> SearchResult:
         if limit:
             q += f" LIMIT {limit}"
 
@@ -111,7 +111,7 @@ class Repository(R):
 
 
 def query_batch(
-    q: str, con: Connection, bsize: int = DEFAULT_BSIZE, limit: Optional[int] = None
+    q: str, con: Connection, bsize: int = DEFAULT_BSIZE, limit: int | None = None
 ) -> Generator[Sequence, None, None]:
     if limit is not None:
         q = f"""
@@ -125,7 +125,7 @@ def query_batch(
         yield rows
 
 
-def query_count(q: str, con: Connection, limit: Optional[int] = None) -> int:
+def query_count(q: str, con: Connection, limit: int | None = None) -> int:
     if limit is not None:
         q = f"""
         SELECT *

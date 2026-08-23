@@ -17,8 +17,7 @@ class FlagsMeta(type):
         annotations = ns.get("__annotations__", {})
 
         meta = {}
-
-        for k, _ in annotations.items():
+        for k in annotations:
             val = ns.get(k)
 
             if isinstance(val, Flag):

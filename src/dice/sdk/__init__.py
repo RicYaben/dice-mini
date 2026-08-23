@@ -1,13 +1,19 @@
 """
 Public interfaces
 """
+
+from dice.internal.modules import new_registry
+from dice.shared import query
+from dice.shared.flags import Flag, Flags, flag
+
 from .tools import Module, Service
-from dice.shared.flags import Flags, Flag, flag
 
 __all__ = [
-    "Module",
-    "flag",
     "Flag",
     "Flags",
-    "Service"
+    "Module",
+    "Service",
+    "flag",
+    "new_registry",
+    "query",
 ]

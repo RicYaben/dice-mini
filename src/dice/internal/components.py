@@ -15,7 +15,6 @@ from .signatures import Signature, new_signature
 
 logger = logging.getLogger(__name__)
 
-
 # TODO: we can make components and signatures a unique interface object with children
 @dataclass
 class Component:
@@ -77,6 +76,7 @@ class ComponentManager:
             for m in registry.modules:
                 full_path_with_module = full_path + [m.desc.name]
                 include = False
+                # TODO: is this ever the case?
                 if modules is None:
                     include = True
                 else:

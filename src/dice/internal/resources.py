@@ -1,7 +1,7 @@
 import logging
 import os
+from collections.abc import Generator
 from itertools import chain
-from typing import Generator, Optional
 
 import pandas as pd
 from sqlalchemy import Connection, select
@@ -36,8 +36,8 @@ def load_resource(s: Session, res_id: int) -> tuple[Resource, Cursor, Source]:
 class Sourcerer:
     """Something to load sources"""
 
-    _gen: Optional[Generator[pd.DataFrame, None, None]] = None
-    _peek: Optional[pd.DataFrame] = None
+    _gen: Generator[pd.DataFrame, None, None] | None = None
+    _peek: pd.DataFrame | None = None
     _peeked: bool = False
 
     _ic: list[str] = []

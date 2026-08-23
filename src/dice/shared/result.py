@@ -1,8 +1,7 @@
-import pandas as pd
-
+from collections.abc import Generator, Sequence
 from uuid import uuid4
-from typing import Generator, Optional, Sequence
 
+import pandas as pd
 from sqlalchemy import Connection, CursorResult, RowMapping
 from sqlmodel import text
 from tqdm import tqdm
@@ -21,41 +20,33 @@ class SearchResult:
 
     def query(self, q: str) -> CursorResult:
         return self.con.execute(text(q))
-    
+
     def batch(self, bsize: int = 50_000) -> Generator[Sequence[RowMapping]]:
         res = self.query(f"SELECT * FROM {self.view}").mappings()
         while rows := res.fetchmany(bsize):
             yield rows
-            
+
     def stream(self) -> Generator[RowMapping]:
         with tqdm(total=self.count()) as bar:
             for b in self.batch():
-                for r in b:
-                    yield r
+                yield from b
                 bar.update(len(b))
 
     def all(self) -> list[dict]:
         res = self.query(f"SELECT * FROM {self.view}")
         cols = res.keys()
 
-        return [
-            dict(zip(cols, row))
-            for row in res.fetchall()
-        ]
+        return [dict(zip(cols, row)) for row in res.fetchall()]
 
-    def df(self, bsize: Optional[int] = None) -> Generator[pd.DataFrame] | pd.DataFrame:
+    def df(self, bsize: int | None = None) -> Generator[pd.DataFrame] | pd.DataFrame:
         return pd.read_sql(
-            text(f"SELECT * FROM {self.view}"),
-            self.con,
-            chunksize=bsize
+            text(f"SELECT * FROM {self.view}"), self.con, chunksize=bsize
         )
 
     def count(self) -> int:
-        return self.query(
-            f"SELECT COUNT(*) FROM {self.view}"
-        ).scalar_one()
+        return self.query(f"SELECT COUNT(*) FROM {self.view}").scalar_one()
 
-    def where(self, fields: list[str] =["*"], **clauses) -> "SearchResult":
+    def where(self, fields: list[str] = ["*"], **clauses) -> "SearchResult":
         new_view = f"tmp_{uuid4().hex}"
 
         q = f"CREATE TEMP VIEW {new_view} AS {query(self.view, fields, **clauses)}"
@@ -77,6 +68,6 @@ class SearchResult:
 
     def __len__(self) -> int:
         return self.count()
-    
+
     def __bool__(self) -> bool:
         return self.count() > 0

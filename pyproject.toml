@@ -25,6 +25,9 @@ dependencies = [
     "tomlkit"
 ]
 
+[tool.pyright]
+typeCheckingMode = "standard"
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 

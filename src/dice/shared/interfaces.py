@@ -1,4 +1,5 @@
-from typing import Generator, Protocol, TypeVar
+from collections.abc import Generator
+from typing import Protocol, TypeVar
 
 from sqlalchemy import Connection
 from sqlmodel import Session, SQLModel

@@ -42,9 +42,7 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
     def hc(e: Event):
         logger.debug("adding missing hosts...")
         t = e.summary.get("table", None)
-        if not t:
-            add_hosts_from_records_table(repo)
-        elif t == Record.__tablename__:
+        if not t or t == Record.__tablename__:
             add_hosts_from_records_table(repo)
 
     return hc

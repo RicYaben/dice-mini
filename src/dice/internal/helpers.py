@@ -1,4 +1,5 @@
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import pandas as pd
 import ujson
@@ -21,11 +22,13 @@ def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
 
 
 def normalize_zgrab2_records(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:
-    parsed = df["data"].apply(ujson.loads)
+    parsed = df["data"].apply(
+        lambda x: ujson.loads(x) if isinstance(x, (str, bytes)) else x
+    )
 
     # Flatten the 'result' dict
     rdf = pd.json_normalize(parsed.tolist(), max_level=1)
-    rdf.columns = rdf.columns.str.removeprefix("result.")
+    rdf.columns = rdf.columns.astype(str).str.removeprefix("result.")
     rdf = rdf.add_prefix(prefix)
 
     # Concatenate original df (without 'data') and flattened result columns

@@ -8,8 +8,8 @@ from modules import registry
 modules_app = typer.Typer(help="Check registered modules")
 
 
-def parse_params(params: str, delimiter: str) -> dict:
-    r = {}
+def parse_params(params: str, delimiter: str) -> dict[str, str]:
+    r: dict[str, str] = {}
     p_split = params.split(delimiter)
     for p in p_split:
         k, val = p.split("=", 1)

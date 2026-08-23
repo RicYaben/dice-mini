@@ -1,5 +1,5 @@
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from .events import Event, EventType, new_event
 
@@ -37,6 +37,10 @@ class HealthMonitor:
 
 
 def new_health_monitor(
-    init: list[HealthCheck] = [], sync: list[HealthCheck] = []
+    init: list[HealthCheck] | None = None, sync: list[HealthCheck] | None = None
 ) -> HealthMonitor:
+    if init is None:
+        init = []
+    if sync is None:
+        sync = []
     return HealthMonitor(init, sync)

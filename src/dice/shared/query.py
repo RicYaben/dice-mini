@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.dialects import sqlite
@@ -60,7 +61,7 @@ def parse_condition(key: str, value: Any) -> Condition:
 class Query:
     model: Any
     conditions: list[Condition] = field(default_factory=list)
-    fields: Optional[list[str]] = None
+    fields: list[str] | None = None
 
     def where(self, **kwargs) -> "Query":
         for k, v in kwargs.items():
@@ -96,8 +97,6 @@ def to_sql(stmt) -> str:
     )
 
 
-def query(
-    model: type[Model], fields: Optional[list[str]] = None, **clauses: dict
-) -> str:
+def query(model: type[Model], fields: list[str] | None = None, **clauses: dict) -> str:
     q = Query(model, fields=fields).where(**clauses)
     return to_sql(build_query(q))

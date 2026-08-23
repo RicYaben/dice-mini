@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.dialects import sqlite
 
@@ -73,7 +73,7 @@ def parse_json_clause(field: str, op: str, value: Any) -> str:
     return f"json_extract(data, '{json_path}') {sql_op} {value}"
 
 
-def with_clauses(q: str, clauses: Optional[dict] = None) -> str:
+def with_clauses(q: str, clauses: dict | None = None) -> str:
     qc = ""
     if clauses:
         qc = "WHERE " + " AND ".join(parse_clause(k, v) for k, v in clauses.items())

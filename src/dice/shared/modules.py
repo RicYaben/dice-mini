@@ -2,7 +2,7 @@ import logging
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Generic, Optional, Protocol, TypeVar, cast
+from typing import Generic, Protocol, TypeVar, cast
 
 from .flags import Flags
 from .models import Label, Tag
@@ -67,7 +67,9 @@ R = TypeVar("R", bound=BaseRepo)
 F = TypeVar("F", bound=Flags)
 
 
-class Runner(Protocol[R, F]):
+class Runner(
+    Protocol[R, F]
+):  # Needs to be like this, even if the lsp doesn't understand it
     def __call__(
         self,
         repo: R,
@@ -81,10 +83,12 @@ def do_nothing(repo: BaseRepo, flags: Flags, logger: logging.Logger) -> None:
 
 
 @dataclass
-class ModuleDescriptor(Generic[R, F]):
+class ModuleDescriptor(
+    Generic[R, F]
+):  # Needs to be like this, even if the lsp doesn't understand it
     t: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     flags: type[F] = field(default=cast(type[F], Flags))
     labels: list["Label"] = field(default_factory=list)
     tags: list["Tag"] = field(default_factory=list)
@@ -93,9 +97,9 @@ class ModuleDescriptor(Generic[R, F]):
     pre_fn: Runner[R, F] = field(default=do_nothing, repr=False)
     post_fn: Runner[R, F] = field(default=do_nothing, repr=False)
 
-    _repo: Optional[R] = field(default=None, init=False, repr=False)
-    _logger: Optional[logging.Logger] = field(default=None, init=False, repr=False)
-    _flags: Optional[F] = field(default=None, init=False, repr=False)
+    _repo: R | None = field(default=None, init=False, repr=False)
+    _logger: logging.Logger | None = field(default=None, init=False, repr=False)
+    _flags: F | None = field(default=None, init=False, repr=False)
 
     def initialize(self, repo: BaseRepo, logger: logging.Logger) -> None:
         self.repo = cast(R, repo)

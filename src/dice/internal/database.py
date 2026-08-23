@@ -1,5 +1,6 @@
+from collections.abc import Iterable, Sequence
 from sqlite3 import IntegrityError
-from typing import Any, Iterable, Literal, Optional, Sequence, Type
+from typing import Any, Literal
 
 from sqlalchemy import Connection, Engine, Row
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -9,7 +10,7 @@ from dice.shared.models import Model
 
 
 def insert_records(
-    session: Session, model: Type[Model], records: list[dict]
+    session: Session, model: type[Model], records: list[dict]
 ) -> Sequence[Row]:
     """
     Quickest way to blindly insert thousands of records into a database.
@@ -29,7 +30,7 @@ def insert_records(
 
 def insert_or_ignore(
     session: Session,
-    model: Type[Model],
+    model: type[Model],
     items: Iterable[Model],
 ) -> Sequence[Row]:
     items = list(items)
@@ -51,7 +52,7 @@ def insert_or_ignore(
     return result
 
 
-def get_or_create(session: Session, model: Type[Model], **kwargs) -> tuple[Any, bool]:
+def get_or_create(session: Session, model: type[Model], **kwargs) -> tuple[Any, bool]:
     # Try to get existing
     obj = session.exec(select(model).filter_by(**kwargs)).first()  # type: ignore
     if obj:
@@ -74,12 +75,12 @@ def get_or_create(session: Session, model: Type[Model], **kwargs) -> tuple[Any, 
 class Connector:
     def __init__(
         self,
-        location: Optional[str],
+        location: str | None,
         driver: Literal["sqlite"] = "sqlite",
     ) -> None:
-        self.location = location if location else ":memory:"
-        self.driver = driver
-        self.engine: Optional[Engine] = None
+        self.location: str = location if location else ":memory:"
+        self.driver: str = driver
+        self.engine: Engine | None = None
 
     def load(self):
         e = create_engine(f"{self.driver}:///{self.location}")
@@ -90,12 +91,14 @@ class Connector:
 
     def connection(self) -> Connection:
         if not self.engine:
-            self.load()
+            _ = self.load()
+
+        assert self.engine is not None
         return self.engine.connect()  # type: ignore
 
     def session(self) -> Session:
         return Session(self.connection())
 
 
-def new_connector(db: Optional[str], name: Literal["sqlite"] = "sqlite") -> Connector:
+def new_connector(db: str | None, name: Literal["sqlite"] = "sqlite") -> Connector:
     return Connector(db, driver=name)

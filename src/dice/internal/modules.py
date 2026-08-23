@@ -56,7 +56,7 @@ class ModuleRegistry:
     def __init__(self, name: str = "custom") -> None:
         self.name = name
         self.modules: list[Module] = []
-        self.children: dict[str, "ModuleRegistry"] = {}
+        self.children: dict[str, ModuleRegistry] = {}
 
     def register(self, desc: ModuleDescriptor) -> "ModuleRegistry":
         t = find_module(desc.t)

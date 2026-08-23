@@ -1,9 +1,8 @@
-from typing import Optional
+from typing import Annotated
 
 import pandas as pd
 import typer
 import ujson
-from typing_extensions import Annotated
 
 from analysis.tools import new_anonymizer, new_remover
 from dice.cli.tools import load_repository
@@ -22,7 +21,8 @@ def normalize_services(services):
     if isinstance(services, str):
         try:
             services = ujson.loads(services)
-        except Exception:
+        except Exception as e:
+            print(e)  # Not going to handle this?
             return []
 
     # single object → list
@@ -38,8 +38,8 @@ def normalize_services(services):
         if "data" in s and isinstance(s["data"], str):
             try:
                 s["data"] = ujson.loads(s["data"])
-            except Exception:
-                pass
+            except Exception as e:
+                print(e)  # Not going to handle this?
         out.append(s)
 
     return out
@@ -53,7 +53,6 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
 
 def anonymize_col(df: pd.DataFrame, col: str):
     mapping = {v: i for i, v in enumerate(df[col].unique(), start=1)}
-
     df[col] = df[col].map(mapping)
 
 
@@ -64,15 +63,15 @@ def search(
         "-q",
         "--query",
     ),
-    database: Optional[str] = typer.Option(
+    database: str | None = typer.Option(
         None,
         "-db",
         "--database",
     ),
-    limit: Optional[int] = typer.Option(None, "-l", "--limit"),
+    limit: int | None = typer.Option(None, "-l", "--limit"),
     # TODO: store mappings
     anonymize: Annotated[str, typer.Option()] = "",
-    mappings: Annotated[Optional[str], typer.Option()] = None,
+    mappings: Annotated[str | None, typer.Option()] = None,
     remove: Annotated[str, typer.Option()] = "",
     fields: Annotated[str, typer.Option()] = "ports,services,labels,tags",
     exclude: Annotated[str, typer.Option()] = "",

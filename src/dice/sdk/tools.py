@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from dice.shared.flags import Flags
 from dice.shared.models import Label, Tag
@@ -22,9 +21,9 @@ def wrap_runner(msg: str, runner: Runner) -> Runner:
 @dataclass
 class Service:
     name: str
-    vendor: Optional[str]
-    version: Optional[str]
-    cpe: Optional[str]
+    vendor: str | None
+    version: str | None
+    cpe: str | None
 
 
 @dataclass
@@ -34,7 +33,7 @@ class Module(ModuleDescriptor):
         self.pre_fn = wrap_runner("initializing", self.pre_fn)
         self.post_fn = wrap_runner("cleaning", self.post_fn)
 
-    def add_label(self, name: str, description: Optional[str] = None) -> "Module":
+    def add_label(self, name: str, description: str | None = None) -> "Module":
         self.labels.append(
             Label(name=name, description=description, module_name=self.name)
         )

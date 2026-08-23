@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pandas as pd
 from sqlalchemy import Connection, MetaData, delete
 from sqlmodel import (
@@ -56,13 +54,13 @@ class Resource(Model, table=True):
 
 
 class Record(Model, table=True):
-    host: Optional[str] = Field(default=None, foreign_key="host.ip")
-    source: Optional[str] = Field(default=None, foreign_key="source.name")
+    host: str | None = Field(default=None, foreign_key="host.ip")
+    source: str | None = Field(default=None, foreign_key="source.name")
     resource_id: int = Field(default=None, foreign_key="resource.id")
 
     data: dict = Field(sa_column=Column(JSON))
-    port: Optional[int] = None
-    protocol: Optional[str] = None
+    port: int | None = None
+    protocol: str | None = None
 
     __table_args__ = (UniqueConstraint("resource_id", "host"),)
 
@@ -84,62 +82,57 @@ class Cursor(Model, table=True):
 
 class Host(Model, table=True):
     ip: str = Field(unique=True)
-    domain: Optional[str] = None
+    domain: str | None = None
 
-    prefix: Optional[str] = None
-    asn: Optional[str] = None
+    prefix: str | None = None
+    asn: str | None = None
 
 
 class Fingerprint(Model, table=True):
-    host: Optional[str] = Field(default=None, foreign_key="host.ip")
-    record_id: Optional[int] = Field(default=None, foreign_key="record.id")
-    resource_id: Optional[int] = Field(
-        default=None, foreign_key="resource.id"
-    )  # TODO: why do we need this?
+    host: str | None = Field(default=None, foreign_key="host.ip")
+    record_id: int | None = Field(default=None, foreign_key="record.id")
 
     data: dict = Field(sa_column=Column(JSON))
-    module_name: str
-
-    port: Optional[int] = None
-    protocol: Optional[str] = None
+    module_name: str | None = None
+    protocol: str | None = None
 
     __table_args__ = (UniqueConstraint("record_id", "host", "module_name"),)
 
 
 class Label(Model, table=True):
     name: str = Field(unique=True)
-    module_name: str
-    description: Optional[str] = None
-    short: Optional[str] = None
-    mitigation: Optional[str] = None
+    module_name: str | None = None
+    description: str | None = None
+    short: str | None = None
+    mitigation: str | None = None
     level: int = 0
 
 
 class FingerprintLabel(Model, table=True):
-    fingerprint_id: Optional[int] = Field(default=None, foreign_key="fingerprint.id")
-    label_id: Optional[int] = Field(default=None, foreign_key="label.id")
+    fingerprint_id: int | None = Field(default=None, foreign_key="fingerprint.id")
+    label_id: int | None = Field(default=None, foreign_key="label.id")
 
     __table_args__ = (UniqueConstraint("fingerprint_id", "label_id"),)
 
 
 class Tag(Model, table=True):
     name: str = Field(unique=True)
-    module_name: str
-    description: str
+    module_name: str | None = None
+    description: str | None = None
 
 
 class HostTag(Model, table=True):
-    host: Optional[str] = Field(default=None, foreign_key="host.ip")
-    tag_id: Optional[int] = Field(default=None, foreign_key="tag.id")
-    details: Optional[str] = None
-    protocol: Optional[str] = None
-    port: Optional[int] = None
+    host: str | None = Field(default=None, foreign_key="host.ip")
+    tag_id: int | None = Field(default=None, foreign_key="tag.id")
+    details: str | None = None
+    protocol: str | None = None
+    port: int | None = None
 
     __table_args__ = (UniqueConstraint("host", "tag_id"),)
 
 
 def get_records_table(
-    con: Connection, name: str, suffix: Optional[str] = "", sep: Optional[str] = "_"
+    con: Connection, name: str, suffix: str | None = "", sep: str | None = "_"
 ) -> Table:
     meta = MetaData()
     if sep and suffix:
