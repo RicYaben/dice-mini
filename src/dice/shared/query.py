@@ -5,7 +5,7 @@ from typing import Any, Literal
 from sqlalchemy import and_, func, select
 from sqlalchemy.dialects import sqlite
 
-from dice.shared.models import Model
+from .models import Model
 
 Op = Literal["eq", "ne", "gt", "gte", "lt", "lte", "in", "bt"]
 

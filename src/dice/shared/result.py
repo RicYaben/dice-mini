@@ -38,6 +38,16 @@ class SearchResult:
 
         return [dict(zip(cols, row)) for row in res.fetchall()]
 
+    def one(self) -> dict:
+        res = self.query(f"SELECT * FROM {self.view}")
+        cols = res.keys()
+
+        first = res.fetchone()
+        if first is None:
+            return {}
+
+        return dict(zip(cols, first))
+
     def df(self, bsize: int | None = None) -> Generator[pd.DataFrame] | pd.DataFrame:
         return pd.read_sql(
             text(f"SELECT * FROM {self.view}"), self.con, chunksize=bsize

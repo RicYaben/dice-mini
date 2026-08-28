@@ -5,16 +5,16 @@ from sqlalchemy import Connection
 from sqlmodel import Session, select
 
 from .interfaces import Repository
-from .models import Fingerprint, FingerprintLabel, HostTag, Label, Model, Tag
+from .models import DatabaseModel, Fingerprint, FingerprintLabel, HostTag, Label, Tag
 from .result import SearchResult
 from .tools import new_fingerprint, new_host_tag
 
-T = TypeVar("T", bound=Model)
+T = TypeVar("T", bound=DatabaseModel)
 
 
 class Cache:
     def __init__(self) -> None:
-        self.cache: dict[type[Model], list[Model]] = {}
+        self.cache: dict[type[DatabaseModel], list[DatabaseModel]] = {}
 
     # NOTE: May be able to remove the generic here
     def add(self, item: T) -> None:
@@ -88,7 +88,7 @@ class BaseRepo:
         self.repo = repo
         self.name = name
 
-    def store(self, *item: Model) -> None:
+    def store(self, *item: DatabaseModel) -> None:
         for i in item:
             self.cache.add(i)
         if self.cache.len() >= self.csize:

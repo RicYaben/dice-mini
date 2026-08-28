@@ -1,4 +1,10 @@
+import logging
 from difflib import ndiff
+from typing import TextIO
+
+import numpy as np
+import pandas as pd
+import ujson
 from sqlalchemy import MetaData
 from tqdm import tqdm
 
@@ -6,9 +12,7 @@ from dice.internal.ast import make_parser
 from dice.internal.info import new_info
 from dice.internal.repository import Repository
 
-import pandas as pd
-import numpy as np
-import ujson
+logger = logging.getLogger(__name__)
 
 
 def diff_ports(left, right):
@@ -209,12 +213,11 @@ def differences(src: pd.DataFrame, dst: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
-def dump(df, path):
+def dump(df, writer: TextIO):
     records = df.to_dict(orient="records")
-    with open(path, "+a") as f:
-        for r in records:
-            ujson.dump(r, f)
-            f.write("\n")
+    for r in records:
+        ujson.dump(r, writer)
+        writer.write("\n")
 
 
 def compare(
@@ -222,7 +225,7 @@ def compare(
     r2: Repository,
     query: str,
     fields: list[str],
-    output: str = "comparison.jsonl",
+    output: TextIO,
 ) -> None:
     parser = make_parser()
     q = parser.to_sql(query)

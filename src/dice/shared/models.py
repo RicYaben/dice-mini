@@ -27,8 +27,12 @@ class Model(SQLModel):
     def from_dataframe(cls, df: pd.DataFrame):
         return [cls.from_series(row) for _, row in df.iterrows()]
 
+class DatabaseModel(Model):
+    ...
 
-class Source(Model, table=True):
+
+
+class Source(DatabaseModel, table=True):
     "A source represents the content of a set of resources (datasets)"
 
     # name of the source, e.g., zgrab2
@@ -36,7 +40,7 @@ class Source(Model, table=True):
     resources: list["Resource"] = Relationship()
 
 
-class Resource(Model, table=True):
+class Resource(DatabaseModel, table=True):
     fpath: str = Field(unique=True)
     source_id: int = Field(default=None, foreign_key="source.id")
 
@@ -53,7 +57,7 @@ class Resource(Model, table=True):
             s.exec(stmt)
 
 
-class Record(Model, table=True):
+class Record(DatabaseModel, table=True):
     host: str | None = Field(default=None, foreign_key="host.ip")
     source: str | None = Field(default=None, foreign_key="source.name")
     resource_id: int = Field(default=None, foreign_key="resource.id")
@@ -65,7 +69,7 @@ class Record(Model, table=True):
     __table_args__ = (UniqueConstraint("resource_id", "host"),)
 
 
-class Cursor(Model, table=True):
+class Cursor(DatabaseModel, table=True):
     resource_id: int = Field(default=None, foreign_key="resource.id", unique=True)
     idx: int = 0
 
@@ -80,7 +84,7 @@ class Cursor(Model, table=True):
         s.commit()
 
 
-class Host(Model, table=True):
+class Host(DatabaseModel, table=True):
     ip: str = Field(unique=True)
     domain: str | None = None
 
@@ -88,7 +92,7 @@ class Host(Model, table=True):
     asn: str | None = None
 
 
-class Fingerprint(Model, table=True):
+class Fingerprint(DatabaseModel, table=True):
     host: str | None = Field(default=None, foreign_key="host.ip")
     record_id: int | None = Field(default=None, foreign_key="record.id")
 
@@ -99,7 +103,7 @@ class Fingerprint(Model, table=True):
     __table_args__ = (UniqueConstraint("record_id", "host", "module_name"),)
 
 
-class Label(Model, table=True):
+class Label(DatabaseModel, table=True):
     name: str = Field(unique=True)
     module_name: str | None = None
     description: str | None = None
@@ -108,20 +112,20 @@ class Label(Model, table=True):
     level: int = 0
 
 
-class FingerprintLabel(Model, table=True):
+class FingerprintLabel(DatabaseModel, table=True):
     fingerprint_id: int | None = Field(default=None, foreign_key="fingerprint.id")
     label_id: int | None = Field(default=None, foreign_key="label.id")
 
     __table_args__ = (UniqueConstraint("fingerprint_id", "label_id"),)
 
 
-class Tag(Model, table=True):
+class Tag(DatabaseModel, table=True):
     name: str = Field(unique=True)
     module_name: str | None = None
     description: str | None = None
 
 
-class HostTag(Model, table=True):
+class HostTag(DatabaseModel, table=True):
     host: str | None = Field(default=None, foreign_key="host.ip")
     tag_id: int | None = Field(default=None, foreign_key="tag.id")
     details: str | None = None

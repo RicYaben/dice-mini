@@ -6,11 +6,11 @@ from sqlalchemy import Connection, Engine, Row
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, SQLModel, create_engine, insert, select
 
-from dice.shared.models import Model
+from dice.shared.models import DatabaseModel
 
 
 def insert_records(
-    session: Session, model: type[Model], records: list[dict]
+    session: Session, model: type[DatabaseModel], records: list[dict]
 ) -> Sequence[Row]:
     """
     Quickest way to blindly insert thousands of records into a database.
@@ -30,8 +30,8 @@ def insert_records(
 
 def insert_or_ignore(
     session: Session,
-    model: type[Model],
-    items: Iterable[Model],
+    model: type[DatabaseModel],
+    items: Iterable[DatabaseModel],
 ) -> Sequence[Row]:
     items = list(items)
     if not items:
@@ -52,7 +52,7 @@ def insert_or_ignore(
     return result
 
 
-def get_or_create(session: Session, model: type[Model], **kwargs) -> tuple[Any, bool]:
+def get_or_create(session: Session, model: type[DatabaseModel], **kwargs) -> tuple[Any, bool]:
     # Try to get existing
     obj = session.exec(select(model).filter_by(**kwargs)).first()  # type: ignore
     if obj:
@@ -76,15 +76,18 @@ class Connector:
     def __init__(
         self,
         location: str | None,
+        model: type[SQLModel] | None = None,
         driver: Literal["sqlite"] = "sqlite",
     ) -> None:
         self.location: str = location if location else ":memory:"
         self.driver: str = driver
         self.engine: Engine | None = None
+        self.model: type[SQLModel] | None = model
 
     def load(self):
         e = create_engine(f"{self.driver}:///{self.location}")
-        SQLModel.metadata.create_all(e)
+        if self.model:
+            self.model.metadata.create_all(e)
 
         self.engine = e
         return e
@@ -100,5 +103,5 @@ class Connector:
         return Session(self.connection())
 
 
-def new_connector(db: str | None, name: Literal["sqlite"] = "sqlite") -> Connector:
-    return Connector(db, driver=name)
+def new_connector(db: str | None, model: type[SQLModel] | None = None, name: Literal["sqlite"] = "sqlite") -> Connector:
+    return Connector(db, driver=name, model=model)

@@ -15,14 +15,23 @@ class Configuration:
         if not fpath:
             self.data = document()
             return
+        self.load(fpath)
 
+    def load(self, fpath: str) -> "Configuration":
+        logger.info(f"Loading configuration from {fpath}")
         with open(fpath, "+r", encoding="utf-8") as f:
             self.data = parse(f.read())
+        return self
 
     def update(self, module: str, **kwargs) -> None:
         if module not in self.data:
             self.data[module] = table()
         self.data[module].update(**kwargs)
+
+    def update_all(self, **kwargs) -> "Configuration":
+        for module, values in kwargs.items():
+            self.update(module, **values)
+        return self
 
     def dump(self, fpath: str) -> None:
         with open(fpath, "w", encoding="utf-8") as f:

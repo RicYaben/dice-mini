@@ -6,6 +6,7 @@ from tabulate import tabulate
 
 from dice.shared.modules import MFACTORY, ModuleType
 
+from .config import Configuration
 from .modules import (
     Module,
     ModuleRegistry,
@@ -20,9 +21,7 @@ logger = logging.getLogger(__name__)
 class Component:
     # type of component: classifier, fingerprinter, scanner...
     t: ModuleType
-    # name of the component
     name: str
-    # list of signatures registered
     signatures: list[Signature]
 
     def initialize(self, repo: Repository) -> "Component":
@@ -38,19 +37,40 @@ class Component:
         self.signatures.extend(signature)
         return self
 
-
 def new_component(t: ModuleType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
+
+class Components:
+    def __init__(self, comps: list[Component]) -> None:
+        self._comps = comps
+
+    def configure(self, config: Configuration) -> "Components":
+        for mod in self.modules():
+            if f := config.data[mod.desc.name]:
+                mod.desc.flags.update(**f)
+        return self
+
+    def initialize(self, repo: Repository) -> "Components":
+        for c in self._comps:
+            c.initialize(repo)
+        return self
+
+    def handle(self) -> None:
+        for c in self._comps:
+            c.handle()
+
+    def modules(self) -> list[Module]:
+        return [m for c in self._comps for s in c.signatures for m in s.modules]
 
 
 class ComponentManager:
     def __init__(self, name: str = "comp") -> None:
         self.name = name
-        # registries registered
         self._registries: list[ModuleRegistry] = []
 
-    def register(self, registry: "ModuleRegistry") -> None:
+    def register(self, registry: "ModuleRegistry") -> 'ComponentManager':
         self._registries.append(registry)
+        return self
 
     def find(self, modules: list[str] = ["*"]) -> list[tuple[str, Module]]:
         result: list[tuple[str, Module]] = []
@@ -105,15 +125,15 @@ class ComponentManager:
         return list(uniq.values())
 
     def build(
-        self, types: list[ModuleType] = MFACTORY.all(), modules: list[str] = ["*"]
-    ) -> list[Component]:
+        self, types: list[ModuleType] | None = None, modules: list[str] = ["*"]
+    ) -> Components:
         comps = []
-        for t in types:
+        for t in types or MFACTORY.all():
             if mods := self.get_modules(t, modules):
                 signature = new_signature(t, self.name, *mods)
                 c = new_component(t, self.name, signature)
                 comps.append(c)
-        return comps
+        return Components(comps)
 
     def info(self, modules: list[str] = ["*"]) -> None:
         modules = list(set(modules))

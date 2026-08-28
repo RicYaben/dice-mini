@@ -70,8 +70,7 @@ class Repository(R):
 
     def querys(self, q: str) -> Generator[dict]:
         for batch in self.query(q):
-            for record in batch:
-                yield record
+            yield from batch
 
     def queryb(
         self,

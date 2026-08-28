@@ -2,7 +2,7 @@ from typing import Any
 
 from sqlalchemy.dialects import sqlite
 
-from dice.shared.models import Model
+from dice.shared.models import DatabaseModel
 
 
 def parse_clause(clause: str, value: Any) -> str:
@@ -80,8 +80,8 @@ def with_clauses(q: str, clauses: dict | None = None) -> str:
     return q.format(clauses=qc)
 
 
-def query(table: Model | str, fields: list[str] = ["*"], **clauses) -> str:
-    if isinstance(table, Model):
+def query(table: DatabaseModel | str, fields: list[str] = ["*"], **clauses) -> str:
+    if isinstance(table, DatabaseModel):
         table = table.__tablename__
 
     return with_clauses(
