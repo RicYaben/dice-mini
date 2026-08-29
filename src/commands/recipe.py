@@ -1,4 +1,3 @@
-
 import typer
 import ujson
 
@@ -29,7 +28,11 @@ recipe_app = typer.Typer(help="Recipes")
     invoke_without_command=True
 )
 def recipe(
-    fpath: str = typer.Argument(help="Path to recipe, identifier, or remote URL"),
+    ctx: typer.Context,
+    fpath: str | None = typer.Option(
+        None, "-R", "--recipe",
+        help="Path to recipe, identifier, or remote URL",
+    ),
     cookbook: str | None = typer.Option(
         None, "-cb", "--cookbook", help="Path to cookbook"
     ),
@@ -46,6 +49,14 @@ def recipe(
         "{}", "--params", help="Parameters to set, as JSON"
     ),
 ) -> None:
+    if ctx.invoked_subcommand is not None:
+        return
+
+    if fpath is None:
+        raise typer.BadParameter(
+            "Missing recipe path, identifier, or remote URL",
+            param_hint="fpath",
+        )
 
     cb = load_cookbook(cookbook)
     desc = cb.resolve(fpath)
@@ -85,7 +96,7 @@ def bake(
     store: str = typer.Option("", "-s", "--store", help="where to store the recipe. stdout by default"),
     # Whether to run the recipe. Sub-command for running the recipe.
     run: bool = typer.Option(
-        False, "run", help="Run the recipe"
+        False, "--run", help="Run the recipe"
     ),
     database: str | None = typer.Option(
         None, "-db", "--database", help="path to database"
@@ -111,7 +122,7 @@ def bake(
         recipe.start(repo)
 
 
-@recipe_app.command(help="query a cookbook for recipes. Returns a list of matching recipes")
+@recipe_app.command(name="list",help="query a cookbook for recipes. Returns a list of matching recipes")
 def list(
     r: str = typer.Option("*", "-R", "--recipes", help="Comma separated list of recipes"),
     loc: str | None = typer.Option(None, "-cb", "--cookbook", help="where recipes are stored"),
@@ -120,7 +131,8 @@ def list(
 
     with writer(output) as w:
         cb = load_cookbook(loc)
-        w.write(cb.info(r.split(",")))
+        df = cb.search(r.split(",")).df()
+        w.write(df.to_string(index=False) + "\n")
 
 @recipe_app.command()
 def show(
@@ -131,8 +143,9 @@ def show(
 
     with writer(output) as w:
         cb = load_cookbook(loc)
-        for desc in cb.find(r.split(",")):
-            w.write(desc, end="\n")
+        for ref in cb.find(r.split(",")):
+            desc = cb.resolve(ref.path)
+            w.write(desc.to_dict(), end="\n")
 
 @recipe_app.command()
 def update(

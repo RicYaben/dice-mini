@@ -6,6 +6,7 @@ import ujson
 from sqlmodel import or_, select
 
 from dice.shared.query import query, to_sql
+from dice.shared.result import SearchResult
 
 from .models import RecipeRef
 from .recipe import Descriptor, unmarshal
@@ -52,7 +53,7 @@ class Cookbook:
             path=str(path),
         ), None
 
-    def find(self, recipes: list[str] | None = None) -> list[RecipeRef]:
+    def search(self, recipes: list[str] | None = None) -> SearchResult:
         patterns = recipes or ["*"]
 
         conditions = [
@@ -60,9 +61,11 @@ class Cookbook:
             for pattern in patterns
         ]
         statement = select(RecipeRef).where(or_(*conditions))
+        return self.repo.search(to_sql(statement))
 
+    def find(self, recipes: list[str] | None = None) -> list[RecipeRef]:
         ret = []
-        for res in self.repo.search(to_sql(statement)):
+        for res in self.search(recipes):
             ref, _ = self.ref(res.id)
             if ref is not None:
                 ret.append(ref)

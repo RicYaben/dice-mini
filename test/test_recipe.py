@@ -1,11 +1,8 @@
-import logging
-
 import ujson
 
 from dice.internal.recipe import new_builder, unmarshal
 from dice.shared.modules import ModuleEnum
 
-logger = logging.getLogger(__name__)
 
 class TestRecipe:
     def test_custom_recipe(self):

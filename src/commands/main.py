@@ -9,7 +9,7 @@ from commands.source import source_app
 
 app = typer.Typer(help="dice-mini CLI")
 app.add_typer(search_app)
-app.add_typer(recipe_app)
+app.add_typer(recipe_app, name="recipe")
 app.add_typer(source_app, name="source")
 app.add_typer(modules_app, name="modules")
 app.add_typer(compare_app)
