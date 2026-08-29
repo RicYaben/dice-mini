@@ -49,8 +49,8 @@ class ModuleFactory:
 
 class ModuleEnum(Enum):
     SCANNER = ModuleType(command="scan", name="scanner", alias="s")
-    CLASSIFIER = ModuleType(command="classify", name="classifier", alias="c")
     FINGERPRINTER = ModuleType(command="fingerprint", name="fingerprinter", alias="f")
+    CLASSIFIER = ModuleType(command="classify", name="classifier", alias="c")
     TAGGER = ModuleType(command="tag", name="tag", alias="t")
 
 

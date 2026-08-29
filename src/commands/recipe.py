@@ -18,18 +18,18 @@ def parse_component_modules(command: str | None, components: str | None, modules
 
     c = parse_command(command) if command else [MFACTORY.get(c) for c in comps]
     if not (command or components):
-        command = "s"
+        c = MFACTORY.get("s")
 
     return c, mods
 
-recipe_app = typer.Typer(help="DICE mini runner")
+recipe_app = typer.Typer(help="Recipes")
 
 @recipe_app.callback(
-    help="Run a registered recipe, either local or remote.",
+    help="Run a recipe, either local or remote.",
     invoke_without_command=True
 )
 def recipe(
-    fpath: str = typer.Argument(help="Path to recipe or remote URL"),
+    fpath: str = typer.Argument(help="Path to recipe, identifier, or remote URL"),
     cookbook: str | None = typer.Option(
         None, "-cb", "--cookbook", help="Path to cookbook"
     ),
@@ -49,10 +49,11 @@ def recipe(
 
     cb = load_cookbook(cookbook)
     desc = cb.resolve(fpath)
+    plugs = plugins.split(",") if plugins else None
 
     recipe = (
         prepare(desc)
-        .plugins(plugins)
+        .plugins(plugs)
         .configure(configuration)
         .params(**ujson.loads(params))
         .bake()
@@ -92,10 +93,11 @@ def bake(
 ):
 
     comps, mods = parse_component_modules(command, components, modules)
+    plugs = plugins.split(",") if plugins else None
     recipe = (
         new_builder()
-        .plugins(plugins)
-        .engine(comps, mods)
+        .plugins(plugs)
+        .components(comps, mods)
         .configure(configuration)
         .params(**ujson.loads(params))
         .bake()

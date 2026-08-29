@@ -28,6 +28,10 @@ dependencies = [
 [tool.pyright]
 typeCheckingMode = "standard"
 
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 

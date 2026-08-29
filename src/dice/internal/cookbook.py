@@ -8,7 +8,7 @@ from sqlmodel import or_, select
 from dice.shared.query import query, to_sql
 
 from .models import RecipeRef
-from .recipe import Descriptor
+from .recipe import Descriptor, unmarshal
 from .repository import Repository
 
 IDENTIFIER_RE = re.compile(r"^10\.\d{4,9}/\S+$")
@@ -79,7 +79,7 @@ class Cookbook:
 
         with open(fpath, "r", encoding="utf-8") as f:
             data = ujson.load(f)
-            return Descriptor(**data)
+            return unmarshal(data)
 
     def fetch_recipe(self, id: str) -> Descriptor:
         # This function should pull the recipe from the repo. It does not save it locally.

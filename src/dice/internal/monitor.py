@@ -8,3 +8,6 @@ class Monitor:
 
     def log(self, message: str):
         ...
+
+def monitor() -> Monitor:
+    return Monitor()

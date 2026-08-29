@@ -10,14 +10,14 @@ DATA_PREFIX: str = "data_"
 DEFAULT_BSIZE: int = 50_000
 
 
-class Configuration:
+class RecipeConfiguration:
     def __init__(self, fpath: str | None) -> None:
         if not fpath:
             self.data = document()
             return
         self.load(fpath)
 
-    def load(self, fpath: str) -> "Configuration":
+    def load(self, fpath: str) -> "RecipeConfiguration":
         logger.info(f"Loading configuration from {fpath}")
         with open(fpath, "+r", encoding="utf-8") as f:
             self.data = parse(f.read())
@@ -28,7 +28,7 @@ class Configuration:
             self.data[module] = table()
         self.data[module].update(**kwargs)
 
-    def update_all(self, **kwargs) -> "Configuration":
+    def update_all(self, **kwargs) -> "RecipeConfiguration":
         for module, values in kwargs.items():
             self.update(module, **values)
         return self
@@ -37,6 +37,9 @@ class Configuration:
         with open(fpath, "w", encoding="utf-8") as f:
             f.write(dumps(self.data))
 
+    def to_dict(self) -> dict:
+        return self.data.unwrap()
 
-def load_configuration(fpath: str | None) -> Configuration:
-    return Configuration(fpath)
+
+def load_configuration(fpath: str | None) -> RecipeConfiguration:
+    return RecipeConfiguration(fpath)

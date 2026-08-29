@@ -32,6 +32,7 @@ def make_repository(base: Repository, name: str, t: ModuleType) -> BaseRepo:
 class Module:
     t: ModuleType
     desc: ModuleDescriptor
+    registry: str | None = None
 
     def initialize(self, repo: Repository) -> None:
         if tags := self.desc.tags:
@@ -50,6 +51,13 @@ class Module:
 
     def post(self) -> None:
         return self.desc.post()
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "type": str(self.t),
+            "name": self.desc.name,
+            "registry": self.registry or "",
+        }
 
 
 class ModuleRegistry:

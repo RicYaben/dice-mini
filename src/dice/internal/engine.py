@@ -1,8 +1,9 @@
 import logging
 
 from .components import Components
-from .config import Configuration
-from .monitor import Monitor
+from .config import RecipeConfiguration
+
+# from .monitor import Monitor
 from .repository import Repository
 
 logger = logging.getLogger(__name__)
@@ -15,15 +16,15 @@ class Engine:
     def run(
         self,
         repo: Repository,
-        config: Configuration,
-        monitor: Monitor,
+        config: RecipeConfiguration,
+        # monitor: Monitor,
     ) -> Repository:
 
         logger.info("preparing (d1)")
         self.components.configure(config)
 
         logger.info("initializing (d2)")
-        self.components.initialize(repo, monitor)
+        self.components.initialize(repo) #, monitor)
 
         logger.info("shaking vigorously (d3)")
         self.components.handle()

@@ -1,12 +1,15 @@
 import os
 from tempfile import TemporaryDirectory
+
 from sqlmodel import Session
 
+from dice.cli.tools import load_repository
 from dice.internal.database import get_or_create
 from dice.internal.loaders import walk
-from dice.internal.models import Source
 from dice.internal.repository import Repository
-from dice.cli.tools import load_repository
+from dice.internal.resources import add_resource
+from dice.shared.models import Source
+
 
 def make_test_zgrab2_source(s: Session, dir: str) -> tuple[Source, str]:
     fpath = os.path.join(dir, "results.jsonl")
@@ -24,14 +27,14 @@ def load_test_repository() -> Repository:
         try:
             repo = load_repository()
             with repo.session() as s:
-                fpath, fpath = make_test_zgrab2_source(s, dir.name)
+                src, fpath = make_test_zgrab2_source(s, dir.name)
 
             for p in walk(fpath):
-                add_resource(repo, src.name, src.id, str(p), resume=false, bsize=batch) # type: ignore
+                add_resource(repo, src, str(p), resume=False, bsize=10)
             return repo
         finally:
             dir.cleanup()
 
 def summary(repo: Repository) -> dict:
-    with repo.connect() as con:
+    with repo.connect() as _:
          return {}
