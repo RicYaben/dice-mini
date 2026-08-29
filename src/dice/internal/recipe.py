@@ -42,7 +42,7 @@ class Recipe:
         self.engine.run(repo, self.desc.configuration) # mon)
 
     def dump(self) -> str:
-        return str(self.desc)
+        return str(self.desc.to_dict())
 
 class RecipeBuilder:
 

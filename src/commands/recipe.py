@@ -115,7 +115,7 @@ def bake(
     )
 
     with writer(store) as w:
-        w.write(recipe.dump())
+        w.write(recipe.dump() + "\n")
 
     if run:
         repo = load_repository(db=database)
