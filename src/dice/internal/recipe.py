@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
+from importlib.metadata import version
 
-from dice import VERSION
 from dice.shared.modules import MFACTORY, ModuleType
 from modules import registry
 
@@ -48,7 +48,7 @@ class RecipeBuilder:
 
     def __init__(self) -> None:
         self._desc = Descriptor(
-            version=VERSION,
+            version=version("dice-mini"),
             name="custom",
             configuration=RecipeConfiguration(None),
             components=Components([]),

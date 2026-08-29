@@ -1,1 +1,3 @@
-VERSION = "0.3"
+from importlib.metadata import version
+
+__version__ = version("dice-mini")
