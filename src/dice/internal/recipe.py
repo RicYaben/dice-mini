@@ -5,7 +5,7 @@ from dice.shared.modules import MFACTORY, ModuleType
 from modules import registry
 
 from .components import ComponentManager, Components
-from .config import RecipeConfiguration
+from .config import Configuration
 from .engine import Engine, new_engine
 from .modules import load_registry_plugins
 
@@ -14,11 +14,11 @@ from .repository import Repository
 
 
 @dataclass
-class Descriptor:
+class Recipe:
     version: str
     name: str
 
-    configuration: RecipeConfiguration
+    configuration: Configuration
     components: Components
     # signatures: Signatures
     requirements: list[str] = field(default_factory=list)
@@ -33,8 +33,8 @@ class Descriptor:
         }
 
 @dataclass
-class Recipe:
-    desc: Descriptor
+class Workflow:
+    desc: Recipe
     engine: Engine
 
     def start(self, repo: Repository) -> None:
@@ -44,34 +44,34 @@ class Recipe:
     def dump(self) -> str:
         return str(self.desc.to_dict())
 
-class RecipeBuilder:
+class WorkflowBuilder:
 
     def __init__(self) -> None:
-        self._desc = Descriptor(
+        self._desc = Recipe(
             version=version("dice-mini"),
             name="custom",
-            configuration=RecipeConfiguration(None),
+            configuration=Configuration(None),
             components=Components([]),
         )
         self._cmanager = ComponentManager().register(registry)
 
-    def configure(self, fpath: str | None) -> 'RecipeBuilder':
+    def configure(self, fpath: str | None) -> 'WorkflowBuilder':
         if fpath is None:
             return self
 
         self._desc.configuration = self._desc.configuration.load(fpath)
         return self
 
-    def params(self, **kwargs) -> 'RecipeBuilder':
+    def params(self, **kwargs) -> 'WorkflowBuilder':
         self._desc.configuration.update_all(**kwargs)
         return self
 
-    def components(self, t: list[ModuleType], mods: list[str]) -> 'RecipeBuilder':
+    def components(self, t: list[ModuleType], mods: list[str]) -> 'WorkflowBuilder':
         c = self._cmanager.build(t, mods)
         self._desc.components.extend(c)
         return self
 
-    def plugins(self, groups: str | list[str] | None) -> 'RecipeBuilder':
+    def plugins(self, groups: str | list[str] | None) -> 'WorkflowBuilder':
         if groups is None:
             return self
 
@@ -85,21 +85,21 @@ class RecipeBuilder:
                     self._cmanager.register(r)
         return self
 
-    def bake(self) -> Recipe:
-        return Recipe(
+    def bake(self) -> Workflow:
+        return Workflow(
             desc=self._desc,
             engine=new_engine(self._desc.components),
         )
 
-    def descriptor(self, desc: Descriptor) -> 'RecipeBuilder':
+    def descriptor(self, desc: Recipe) -> 'WorkflowBuilder':
         self._desc = desc
         return self
 
-    def unmarshal(self, data: dict) -> Descriptor:
+    def unmarshal(self, data: dict) -> Recipe:
         # This should return a RecipeBuilder, but there are a few things that would change
 
         # conf
-        conf = RecipeConfiguration(None)
+        conf = Configuration(None)
         conf.update_all(**data["configuration"])
 
         # plugins
@@ -113,7 +113,7 @@ class RecipeBuilder:
             if comp := self._cmanager.make(t, mods):
                 comps.add(comp)
 
-        return Descriptor(
+        return Recipe(
             version=data["version"],
             name=data["name"],
             configuration=conf,
@@ -121,11 +121,11 @@ class RecipeBuilder:
             requirements=data["requirements"],
         )
 
-def new_builder() -> RecipeBuilder:
-    return RecipeBuilder()
+def new_builder() -> WorkflowBuilder:
+    return WorkflowBuilder()
 
-def prepare(desc: Descriptor) -> RecipeBuilder:
+def prepare(desc: Recipe) -> WorkflowBuilder:
     return new_builder().descriptor(desc)
 
-def unmarshal(data: dict) -> Descriptor:
+def unmarshal(data: dict) -> Recipe:
     return new_builder().unmarshal(data)

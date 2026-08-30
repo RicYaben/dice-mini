@@ -6,7 +6,7 @@ from tabulate import tabulate
 
 from dice.shared.modules import MFACTORY, ModuleType
 
-from .config import RecipeConfiguration
+from .config import Configuration
 from .modules import (
     Module,
     ModuleRegistry,
@@ -76,7 +76,7 @@ class Components:
         self._comps.extend(comps._comps)
         return self
 
-    def configure(self, config: RecipeConfiguration) -> "Components":
+    def configure(self, config: Configuration) -> "Components":
         for mod in self.modules:
             if f := config.data[mod.desc.name]:
                 mod.desc.flags.update(**f)

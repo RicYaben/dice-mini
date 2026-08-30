@@ -1,9 +1,10 @@
+import ipaddress
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Optional
-from collections import OrderedDict
+
 from lark import Lark, Token, Transformer, Tree, v_args
 
-import ipaddress
 
 @dataclass
 class IPRange:
@@ -164,31 +165,26 @@ class SQLBuilder:
         sql = ["SELECT DISTINCT(host.ip) FROM host AS host"]
         where = []
 
-        # ---------- IP ----------
         ip_clauses = []
 
         # group OR conditions
         if ip_clauses:
             where.append("(" + " OR ".join(ip_clauses) + ")")
 
-        # ---------- Filters ----------
         filters = ast.get("filters")
         if filters and filters["type"] != "TRUE":
             expr = self.visit(filters)
             if expr:
                 where.append(expr)
 
-        # ---------- JOINs ----------
         for join in self.joins:
             sql.append(join)
 
-        # ---------- WHERE ----------
         if where:
             sql.append("WHERE " + " AND ".join(where))
 
         return " ".join(sql)
 
-    # ---------- Visitor ----------
     def visit(self, node):
         t = node["type"]
 
@@ -210,7 +206,6 @@ class SQLBuilder:
 
         raise ValueError(f"Unknown node type: {t}")
 
-    # ---------- Condition ----------
     def condition(self, node):
         field = node["field"]
         op = node["op"]
@@ -240,7 +235,6 @@ class SQLBuilder:
 
         return f"{table_alias}.{column} {op} {value}"
 
-    # ---------- Field / Table Resolution ----------
     def resolve_field(self, field):
         table = None
         for prefix, tbl in TABLE_MAP.items():
@@ -258,7 +252,6 @@ class SQLBuilder:
 
         return table, column
 
-    # ---------- JOINs ----------
     def ensure_join(self, table):
         if table == "host":
             return

@@ -5,6 +5,12 @@ from pathlib import Path
 import pandas as pd
 
 
+class UnsupportedFileExtensionError(Exception):
+    def __init__(self, ext: str):
+        self.ext = ext
+        super().__init__(f"unsupported file extension: {ext}")
+
+
 def walk(p: str):
     """
     Iterate over a list of paths that can be:
@@ -62,11 +68,10 @@ def get_loader_normalizer(source: str) -> Callable[[pd.DataFrame], pd.DataFrame]
 
 
 def jsonl_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None]:
-    # NOTE: engine pyarrow does not support chunking
     reader = pd.read_json(
         p,
         lines=True,
-        dtype=True,
+        #dtype=True,
         convert_dates=False,
         chunksize=batch_size,
         encoding="utf-8",
@@ -88,7 +93,7 @@ def get_reader(ext: str):
         case ".csv":
             return csv_reader
         case _:
-            raise Exception(f"usupported file extension: {ext}")
+            raise UnsupportedFileExtensionError(ext)
 
 
 def read_resource(

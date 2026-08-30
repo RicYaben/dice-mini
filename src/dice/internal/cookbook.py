@@ -9,7 +9,7 @@ from dice.shared.query import query, to_sql
 from dice.shared.result import SearchResult
 
 from .models import RecipeRef
-from .recipe import Descriptor, unmarshal
+from .recipe import Recipe, unmarshal
 from .repository import Repository
 
 IDENTIFIER_RE = re.compile(r"^10\.\d{4,9}/\S+$")
@@ -72,7 +72,7 @@ class Cookbook:
 
         return ret
 
-    def read_recipe(self, fpath: str | Path) -> Descriptor:
+    def read_recipe(self, fpath: str | Path) -> Recipe:
         if isinstance(fpath, str):
             fpath = Path(fpath)
         if fpath.is_dir():
@@ -84,14 +84,14 @@ class Cookbook:
             data = ujson.load(f)
             return unmarshal(data)
 
-    def fetch_recipe(self, id: str) -> Descriptor:
+    def fetch_recipe(self, id: str) -> Recipe:
         # This function should pull the recipe from the repo. It does not save it locally.
         raise NotImplementedError
 
-    def pull_recipe(self, url: str) -> Descriptor:
+    def pull_recipe(self, url: str) -> Recipe:
         raise NotImplementedError
 
-    def resolve(self, fpath: str) -> Descriptor:
+    def resolve(self, fpath: str) -> Recipe:
         if is_local(fpath):
             return self.read_recipe(fpath)
 

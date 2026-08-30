@@ -1,7 +1,7 @@
 import logging
 
 from .components import Components
-from .config import RecipeConfiguration
+from .config import Configuration
 
 # from .monitor import Monitor
 from .repository import Repository
@@ -16,7 +16,7 @@ class Engine:
     def run(
         self,
         repo: Repository,
-        config: RecipeConfiguration,
+        config: Configuration,
         # monitor: Monitor,
     ) -> Repository:
 

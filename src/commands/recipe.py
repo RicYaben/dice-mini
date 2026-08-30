@@ -1,3 +1,4 @@
+import pandas as pd
 import typer
 import ujson
 
@@ -6,7 +7,10 @@ from dice.internal.recipe import new_builder, prepare
 from dice.shared.modules import MFACTORY, ModuleType
 
 
-def parse_command(cmd: str):
+def parse_command(cmd: str | None) -> list[ModuleType]:
+    if not cmd:
+        return []
+
     ts = MFACTORY.all()
     mc = MFACTORY.get(cmd)
     return ts[ts.index(mc) :]
@@ -17,7 +21,7 @@ def parse_component_modules(command: str | None, components: str | None, modules
 
     c = parse_command(command) if command else [MFACTORY.get(c) for c in comps]
     if not (command or components):
-        c = MFACTORY.get("s")
+        c = [MFACTORY.get("s")]
 
     return c, mods
 
@@ -59,23 +63,23 @@ def recipe(
         )
 
     cb = load_cookbook(cookbook)
-    desc = cb.resolve(fpath)
-    plugs = plugins.split(",") if plugins else None
+    rp = cb.resolve(fpath)
+    regs = plugins.split(",") if plugins else None
 
-    recipe = (
-        prepare(desc)
-        .plugins(plugs)
+    wf = (
+        prepare(rp)
+        .plugins(regs)
         .configure(configuration)
         .params(**ujson.loads(params))
         .bake()
     )
 
     repo = load_repository(database)
-    recipe.start(repo)
+    wf.start(repo)
 
 
-@recipe_app.command(help="Bake a recipe from arguments")
-def bake(
+@recipe_app.command(name="bake", help="Bake a recipe from arguments")
+def bake_recipe(
     # One of S,F,C,T; in that ascending order, it runs all components until that one (inclusive)
     command: str | None = typer.Argument(None, help="components to use"),
     # Components and modules to use
@@ -104,10 +108,10 @@ def bake(
 ):
 
     comps, mods = parse_component_modules(command, components, modules)
-    plugs = plugins.split(",") if plugins else None
-    recipe = (
+    regs = plugins.split(",") if plugins else None
+    wf = (
         new_builder()
-        .plugins(plugs)
+        .plugins(regs)
         .components(comps, mods)
         .configure(configuration)
         .params(**ujson.loads(params))
@@ -115,15 +119,15 @@ def bake(
     )
 
     with writer(store) as w:
-        w.write(recipe.dump() + "\n")
+        w.write(wf.dump() + "\n")
 
     if run:
         repo = load_repository(db=database)
-        recipe.start(repo)
+        wf.start(repo)
 
 
 @recipe_app.command(name="list",help="query a cookbook for recipes. Returns a list of matching recipes")
-def list(
+def list_recipes(
     r: str = typer.Option("*", "-R", "--recipes", help="Comma separated list of recipes"),
     loc: str | None = typer.Option(None, "-cb", "--cookbook", help="where recipes are stored"),
     output: str = typer.Option("", "-o", "--output", help="where to output results. stdout by default"),
@@ -132,10 +136,12 @@ def list(
     with writer(output) as w:
         cb = load_cookbook(loc)
         df = cb.search(r.split(",")).df()
+
+        assert isinstance(df, pd.DataFrame)
         w.write(df.to_string(index=False) + "\n")
 
-@recipe_app.command()
-def show(
+@recipe_app.command(name="show")
+def show_recipes(
     r: str = typer.Option("*", "-R", "--recipes", help="Comma separated list of recipes"),
     loc: str | None= typer.Option(None, "-cb", "--cookbook", help="where recipes are stored"),
     output: str = typer.Option("", "-o", "--output", help="where to output results. stdout by default"),
@@ -144,19 +150,26 @@ def show(
     with writer(output) as w:
         cb = load_cookbook(loc)
         for ref in cb.find(r.split(",")):
-            desc = cb.resolve(ref.path)
-            w.write(desc.to_dict(), end="\n")
+            recipe = cb.resolve(ref.path)
+            w.write(recipe.to_dict(), end="\n")
 
-@recipe_app.command()
-def update(
+@recipe_app.command(name="update")
+def update_recipes(
     r: str = typer.Option("*", "-R", "--recipes", help="Comma separated list of recipes"),
     loc: str | None = typer.Option(None, "-cb", "--cookbook", help="where recipes are stored"),
 ):
     ...
 
-@recipe_app.command()
-def remove(
+@recipe_app.command(name="remove")
+def remove_recipes(
     r: str = typer.Option("*", "-R", "--recipes", help="Comma separated list of recipes"),
+    loc: str | None = typer.Option(None, "-cb", "--cookbook", help="where recipes are stored"),
+):
+    ...
+
+
+@recipe_app.command(name="gui")
+def gui(
     loc: str | None = typer.Option(None, "-cb", "--cookbook", help="where recipes are stored"),
 ):
     ...

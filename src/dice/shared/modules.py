@@ -82,6 +82,12 @@ def do_nothing(repo: BaseRepo, flags: Flags, logger: logging.Logger) -> None:
     return
 
 
+class ModuleNotInitializedError(Exception):
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"Module {name} is not initialized")
+
+
 @dataclass
 class ModuleDescriptor(
     Generic[R, F]
@@ -109,7 +115,7 @@ class ModuleDescriptor(
     @property
     def logger(self) -> logging.Logger:
         if self._logger is None:
-            raise Exception("module not initialized")
+            raise ModuleNotInitializedError(self.name)
         return self._logger
 
     @logger.setter
@@ -119,13 +125,13 @@ class ModuleDescriptor(
     @property
     def repo(self) -> R:
         if not self._repo:
-            raise Exception("module not initialized")
+            raise ModuleNotInitializedError(self.name)
         return self._repo
 
     @property
     def rflags(self) -> F:
         if not self._flags:
-            raise Exception("module not initialized")
+            raise ModuleNotInitializedError(self.name)
         return self._flags
 
     @rflags.setter
@@ -181,7 +187,6 @@ class ModuleDescriptor(
         return "\n".join(lines)
 
 
-# TODO: this is pagination with a bar
 # def zgrab2_handler(
 #     mod: Module,
 #     fp_cb: FPCallback,

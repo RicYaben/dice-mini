@@ -80,9 +80,12 @@ def with_clauses(q: str, clauses: dict | None = None) -> str:
     return q.format(clauses=qc)
 
 
-def query(table: DatabaseModel | str, fields: list[str] = ["*"], **clauses) -> str:
+def query(table: DatabaseModel | str, fields: list[str] | None = None, **clauses) -> str:
     if isinstance(table, DatabaseModel):
         table = table.__tablename__
+
+    if fields is None:
+        fields = ["*"]
 
     return with_clauses(
         f"""

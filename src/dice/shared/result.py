@@ -1,4 +1,4 @@
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from uuid import uuid4
 
 import pandas as pd
@@ -9,6 +9,7 @@ from tqdm import tqdm
 from dice.shared._query import query
 
 
+# TODO: I would love to have a pagination option here
 class SearchResult:
     def __init__(
         self,
@@ -48,7 +49,7 @@ class SearchResult:
 
         return dict(zip(cols, first))
 
-    def df(self, bsize: int | None = None) -> Generator[pd.DataFrame] | pd.DataFrame:
+    def df(self, bsize: int | None = None) -> Iterator[pd.DataFrame] | pd.DataFrame:
         return pd.read_sql(
             text(f"SELECT * FROM {self.view}"), self.con, chunksize=bsize
         )
@@ -56,7 +57,10 @@ class SearchResult:
     def count(self) -> int:
         return self.query(f"SELECT COUNT(*) FROM {self.view}").scalar_one()
 
-    def where(self, fields: list[str] = ["*"], **clauses) -> "SearchResult":
+    def where(self, fields: list[str] | None = None, **clauses) -> "SearchResult":
+        if fields is None:
+            fields = ["*"]
+
         new_view = f"tmp_{uuid4().hex}"
 
         q = f"CREATE TEMP VIEW {new_view} AS {query(self.view, fields, **clauses)}"
