@@ -4,40 +4,53 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dice-mini"
-version = "0.1.0"
+version = "0.3.0"
 description = "DICE mini"
 authors = [{ name = "Ricardo Yaben", email = "rmyl@dtu.dk" }]
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pandas",
-    "duckdb",
-    "numpy",
-    "plotly",
-    "squarify",
-    "netgraph",
-    "hilbertcurve",
+    "pandas", # dice
+    "numpy", # dice
     "lark",
     "tabulate",
     "tqdm",
     "ujson",
     "pyarrow",
     "typer",
+    "sqlmodel",
     "dacite",
-    "cryptography"
+    "cryptography",
+    "tomlkit"
 ]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["dice", "dice.*", "commands", "commands.*"]
+include = ["dice", "dice.*", "modules", "modules.*", "commands", "commands.*"]
+exclude = ["analysis", "analysis.*"]
 
 [project.urls]
 Homepage = "https://github.com/RicYaben/dice-mini"
 Issues = "https://github.com/RicYaben/dice-mini/issues"
+
+[project.optional-dependencies]
+analysis = [
+    "plotly",
+    "squarify",
+    "netgraph",
+    "hilbertcurve",
+]
 
 [project.scripts]
 dice-mini = "commands.main:main"

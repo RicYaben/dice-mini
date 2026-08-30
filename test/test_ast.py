@@ -1,8 +1,12 @@
 import unittest
+
 import ujson
-from dice.ast import new_transformer, new_parser, get_grammar
+
+from dice.internal.ast import get_grammar, new_parser, new_transformer
+
 
 class TestAST(unittest.TestCase):
+
     queries = [
         '0.0.0.0/0 port:80 port:22',
         'port>=1 port<=1000 (service:modbus or service:fox) -tag:anonymous',

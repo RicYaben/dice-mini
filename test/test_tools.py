@@ -1,26 +1,40 @@
 import os
-import tempfile
-from typing import Callable
+from tempfile import TemporaryDirectory
 
-from dice import repo, helpers, models
+from sqlmodel import Session
 
-def make_test_sources() -> tuple[list[models.Source], Callable]:
-    tmpdir = tempfile.TemporaryDirectory()
-    fpath = os.path.join(tmpdir.name, "results.jsonl")
+from dice.cli.tools import load_repository
+from dice.internal.database import get_or_create
+from dice.internal.loaders import walk
+from dice.internal.repository import Repository
+from dice.internal.resources import add_resource
+from dice.shared.models import Source
+
+
+def make_test_zgrab2_source(s: Session, dir: str) -> tuple[Source, str]:
+    fpath = os.path.join(dir, "results.jsonl")
     with open(fpath, "w", encoding="utf-8") as f:
         f.write(
-            '{"ip":"2.2.2.2","port":4242,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'+
-            '{"ip":"1.1.1.1","port":4242,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'
+            '{"ip":"2.2.2.2","port":0,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'+
+            '{"ip":"1.1.1.1","port":0,"data":{"test":{"status":"success","protocol":"test"}}}\r\n'
         )
-    
-    # takes a name of the source and a path to a file
-    src = helpers.new_source("zgrab2", fpath, "-")
-    return ([src], tmpdir.cleanup)
 
-def load_test_repository() -> repo.Repository:
-        srcs, clean = make_test_sources()
+    src, _ = get_or_create(s, Source, name="zgrab2")
+    return (src, fpath)
+
+def load_test_repository() -> Repository:
+        dir = TemporaryDirectory()
         try:
-            r = repo.load_repository(srcs)
-            return r
+            repo = load_repository()
+            with repo.session() as s:
+                src, fpath = make_test_zgrab2_source(s, dir.name)
+
+            for p in walk(fpath):
+                add_resource(repo, src, str(p), resume=False, bsize=10)
+            return repo
         finally:
-            clean()
+            dir.cleanup()
+
+def summary(repo: Repository) -> dict:
+    with repo.connect() as _:
+         return {}
