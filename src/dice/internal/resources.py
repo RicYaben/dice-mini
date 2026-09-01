@@ -10,7 +10,6 @@ from tqdm import tqdm
 
 from dice.shared.models import Cursor, Record, Resource, Source
 
-from .config import DEFAULT_BSIZE
 from .database import get_or_create
 from .loaders import get_loader_normalizer, read_resource
 from .repository import Repository
@@ -79,7 +78,7 @@ class Sourcerer:
 
         n = min(1000, len(p))
         logger.debug(f"polling source with {n}/{len(p)}")
-        s = p.sample(n)
+        p.sample(n)
 
         # numeric cols
         ic = list(p.select_dtypes(include=["number"]).columns)
@@ -162,8 +161,8 @@ def add_resource(
     repo: Repository,
     source: Source,
     fpath: str,
+    bsize: int,
     resume: bool = True,
-    bsize: int = DEFAULT_BSIZE,
 ):
     logger.info(f"adding resource from {fpath} ({bsize}/b)")
 

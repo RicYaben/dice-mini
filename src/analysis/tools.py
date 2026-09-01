@@ -4,9 +4,10 @@ from typing import Optional
 import pandas as pd
 import ujson
 
+
 def count_groups(df: pd.DataFrame, *cols: str) -> pd.DataFrame:
     "returns a grouped dataframe with counts using a list of columns. The order of the columns determines how the groups are formed"
-    
+
     # Group by the specified columns and count the occurrences
     grouped = df.groupby(list(cols)).size().to_frame('count')
     grouped = grouped.sort_values("count", ascending=False)  # Sort by index to keep order
@@ -66,11 +67,11 @@ class Anonymizer:
         if (o:=self.out) and o.exists():
             self.mappings = ujson.loads(o.read_text())
             return
-        
-    @property    
+
+    @property
     def out(self):
         return self._out
-    
+
     @out.setter
     def out(self, fpath: Optional[str]) -> None | Path:
         if fpath:
@@ -85,7 +86,7 @@ class Anonymizer:
             self._apply(df, col)
         self._save()
         return df
-    
+
     def _update_nested(self, row, base_col, nested_path, field_key, extract_fn):
         obj = row[base_col]
 

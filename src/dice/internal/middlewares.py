@@ -5,7 +5,6 @@ from tqdm import tqdm
 
 from dice.shared.models import Cursor, Host, Record, Resource
 
-from .config import DEFAULT_BSIZE
 from .database import insert_or_ignore
 from .events import Event
 from .health import HealthCheck
@@ -47,7 +46,8 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
 
     return hc
 
-
+# TODO: health checks should be able to check the configuration, or at least receive more arguments,
+# otherwise I cannot set the bsize properly
 def resume_cursors(repo: Repository) -> HealthCheck:
     def hc(_):
         con = repo.connect()
@@ -55,7 +55,7 @@ def resume_cursors(repo: Repository) -> HealthCheck:
 
         rows = con.execute(stmt).all()
         for res in rows:
-            r = new_resourcerer(res.id, True, DEFAULT_BSIZE)
+            r = new_resourcerer(res.id, True, 10_000)
             r.cast(con)
 
     return hc

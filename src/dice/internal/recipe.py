@@ -5,7 +5,7 @@ from dice.shared.modules import MFACTORY, ModuleType
 from modules import registry
 
 from .components import ComponentManager, Components
-from .config import Configuration
+from .config import RecipeConfig
 from .engine import Engine, new_engine
 from .modules import load_registry_plugins
 
@@ -18,7 +18,7 @@ class Recipe:
     version: str
     name: str
 
-    configuration: Configuration
+    configuration: RecipeConfig
     components: Components
     # signatures: Signatures
     requirements: list[str] = field(default_factory=list)
@@ -50,7 +50,7 @@ class WorkflowBuilder:
         self._desc = Recipe(
             version=version("dice-mini"),
             name="custom",
-            configuration=Configuration(None),
+            configuration=RecipeConfig(None),
             components=Components([]),
         )
         self._cmanager = ComponentManager().register(registry)
@@ -62,7 +62,7 @@ class WorkflowBuilder:
         self._desc.configuration = self._desc.configuration.load(fpath)
         return self
 
-    def params(self, **kwargs) -> 'WorkflowBuilder':
+    def flags(self, **kwargs) -> 'WorkflowBuilder':
         self._desc.configuration.update_all(**kwargs)
         return self
 
@@ -71,7 +71,7 @@ class WorkflowBuilder:
         self._desc.components.extend(c)
         return self
 
-    def plugins(self, groups: str | list[str] | None) -> 'WorkflowBuilder':
+    def registries(self, groups: str | list[str] | None) -> 'WorkflowBuilder':
         if groups is None:
             return self
 
@@ -99,11 +99,11 @@ class WorkflowBuilder:
         # This should return a RecipeBuilder, but there are a few things that would change
 
         # conf
-        conf = Configuration(None)
+        conf = RecipeConfig(None)
         conf.update_all(**data["configuration"])
 
         # plugins
-        self.plugins(data["requirements"])
+        self.registries(data["requirements"])
 
         # comps
         comps = Components([])

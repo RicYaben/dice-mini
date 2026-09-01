@@ -1,5 +1,6 @@
 import sys
 from contextlib import nullcontext
+from pathlib import Path
 
 from dice.internal.cookbook import Cookbook, new_cookbook
 from dice.internal.database import new_connector
@@ -30,13 +31,13 @@ def load_cookbook(db: str | None = None) -> Cookbook:
     return cb
 
 
-def writer_ctx(output: str | None) -> object:
+def writer_ctx(output: str | Path | None) -> object:
     if not output:
         return nullcontext(sys.stdout)
     return open(output, "+a")
 
 class Writer:
-    def __init__(self, output: str | None):
+    def __init__(self, output: str | Path | None):
         self._ctx = writer_ctx(output)
 
     def __enter__(self):
@@ -45,5 +46,5 @@ class Writer:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return self._ctx.__exit__(exc_type, exc_val, exc_tb)
 
-def writer(output: str | None) -> Writer:
+def writer(output: str | Path | None) -> Writer:
     return Writer(output)

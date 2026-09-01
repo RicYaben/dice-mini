@@ -243,7 +243,7 @@ def compare(
         for df in gen:
             ips = df.ip.tolist()
 
-            q = info_b.make(ips, meta.tables)
+            q = info_b.make(ips)
 
             src_df = pd.read_sql(q, c1)
             dst_df = pd.read_sql(q, c2)

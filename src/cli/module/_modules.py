@@ -18,27 +18,6 @@ def parse_params(params: str, delimiter: str) -> dict[str, str]:
 
 
 @modules_app.command()
-def list(
-    m: str = typer.Option(
-        "*", "-M", "--modules", help="Comma separated list of modules"
-    ),
-    plugins: str | None = typer.Option(
-        None, "--plugins", help="Load module registries as plugins"
-    ),
-) -> None:
-    manager = new_component_manager("-")
-    manager.register(registry)
-
-    # registry plugins
-    if plugins and (regs := load_registry_plugins(plugins)):
-        for r in regs:
-            manager.register(r)
-
-    modules = m.split(",")
-    manager.info(modules=modules)
-
-
-@modules_app.command()
 def config(
     m: str = typer.Option(
         "*", "-M", "--modules", help="Comma separated list of modules"
@@ -79,34 +58,3 @@ def config(
     for mod in modules:
         conf.update(mod.desc.name, **kwargs)
     conf.dump(configuration)
-
-
-@modules_app.command()
-def show(
-    m: str = typer.Option(
-        "*", "-M", "--modules", help="Comma separated list of modules"
-    ),
-    plugins: str | None = typer.Option(
-        None, "--plugins", help="Load module registries as plugins"
-    ),
-    configuration: str | None = typer.Option(
-        None, "-c", "--configuration", help="Path to configuration file"
-    ),
-) -> None:
-    manager = new_component_manager("-")
-    manager.register(registry)
-
-    # registry plugins
-    if plugins and (regs := load_registry_plugins(plugins)):
-        for r in regs:
-            manager.register(r)
-
-    modules = [m for _, m in manager.find(modules=m.split(","))]
-    conf = load_configuration(configuration)
-
-    descriptors = []
-    for mod in modules:
-        if mod.desc.name in conf.data and (d := conf.data.get(mod.desc.name)):
-            mod.desc.flags.update(**d)
-        descriptors.append(str(mod.desc))
-    print("\n\n".join(descriptors))

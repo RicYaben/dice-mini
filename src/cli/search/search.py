@@ -1,16 +1,11 @@
-from typing import Annotated
-
 import pandas as pd
-import typer
 import ujson
 
 from analysis.tools import new_anonymizer, new_remover
-from dice.cli.tools import load_repository, writer
+from dice.cli.tools import load_repository
 from dice.internal.ast import make_parser
 from dice.internal.info import new_info
 from dice.shared.query import to_sql
-
-search_app = typer.Typer(help="Query the database")
 
 
 def normalize_services(services):
@@ -55,32 +50,21 @@ def anonymize_col(df: pd.DataFrame, col: str):
     mapping = {v: i for i, v in enumerate(df[col].unique(), start=1)}
     df[col] = df[col].map(mapping)
 
-
-@search_app.command()
 def search(
-    q: str = typer.Option(
-        "",
-        "-q",
-        "--query",
-    ),
-    database: str | None = typer.Option(
-        None,
-        "-db",
-        "--database",
-    ),
-    limit: int | None = typer.Option(None, "-l", "--limit"),
+    query: str,
+    database: str | None = None,
+    limit: int | None = None,
     # TODO: store mappings
-    anonymize: Annotated[str, typer.Option()] = "",
-    mappings: Annotated[str | None, typer.Option()] = None,
-    remove: Annotated[str, typer.Option()] = "",
-    fields: Annotated[str, typer.Option()] = "ports,services,labels,tags",
-    exclude: Annotated[str, typer.Option()] = "",
-    batch: int | None = typer.Option(50_000, "-b", "--batch"),
-    output: str = typer.Option("", "-o", "--output", help="where to output results. stdout by default"),
+    anonymize: str | None = None,
+    mappings: str | None = None,
+    remove: str | None = None,
+    fields: str = "ports,services,labels,tags",
+    exclude: str | None = None,
+    batch: int | None = 50_000,
 ) -> None:
     flist = fields.split(",")
     parser = make_parser()
-    qt = parser.to_sql(q)
+    qt = parser.to_sql(query)
 
     repo = load_repository(db=database)
     res = repo.search(qt, limit=limit)
@@ -106,14 +90,13 @@ def search(
 
     info_b = new_info(flist)
 
-    with writer(output) as w:
-        for b in res.df(batch):
-            ips = b["ip"].tolist()  # type: ignore
-            qs = info_b.make(ips)
-            rows = repo.search(to_sql(qs)).all()
-            df = pd.DataFrame(rows)
+    for b in res.df(batch):
+        ips = b["ip"].tolist()  # type: ignore
+        qs = info_b.make(ips)
+        rows = repo.search(to_sql(qs)).all()
+        df = pd.DataFrame(rows)
 
-            for p in procs:
-                df = p(df)
+        for p in procs:
+            df = p(df)
 
-            w.write(df.to_json(orient="records", lines=True, force_ascii=False))
+        print(df.to_json(orient="records", lines=True, force_ascii=False))
