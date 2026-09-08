@@ -6,7 +6,7 @@ from tabulate import tabulate
 
 from dice.shared.modules import MFACTORY, ModuleType
 
-from .config import RecipeConfig
+from .config import ModuleFlags
 from .modules import (
     Module,
     ModuleRegistry,
@@ -15,6 +15,7 @@ from .repository import Repository
 from .signatures import Signature, new_signature
 
 logger = logging.getLogger(__name__)
+
 
 # TODO: we can make components and signatures a unique interface object with children
 @dataclass
@@ -54,8 +55,10 @@ class Component:
             "modules": [m.to_dict() for m in self.modules],
         }
 
+
 def new_component(t: ModuleType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
+
 
 class Components:
     def __init__(self, comps: list[Component]) -> None:
@@ -76,9 +79,9 @@ class Components:
         self._comps.extend(comps._comps)
         return self
 
-    def configure(self, config: RecipeConfig) -> "Components":
+    def flags(self, config: ModuleFlags) -> "Components":
         for mod in self.modules:
-            if f := config._data[mod.desc.name]:
+            if f := config[mod.desc.name]:
                 mod.desc.flags.update(**f)
         return self
 
@@ -110,7 +113,7 @@ class ComponentManager:
         self.name = name
         self._registries: list[ModuleRegistry] = []
 
-    def register(self, registry: "ModuleRegistry") -> 'ComponentManager':
+    def register(self, registry: "ModuleRegistry") -> "ComponentManager":
         self._registries.append(registry)
         return self
 
@@ -131,7 +134,9 @@ class ComponentManager:
                     return True
             return False
 
-        def collect(mods: list[str], registry: "ModuleRegistry", path: list[str]) -> list[tuple[str, Module]]:
+        def collect(
+            mods: list[str], registry: "ModuleRegistry", path: list[str]
+        ) -> list[tuple[str, Module]]:
             result = []
             path.append(registry.name)
 
@@ -183,7 +188,9 @@ class ComponentManager:
                 comps.append(c)
         return Components(comps)
 
-    def make(self, type: ModuleType, modules: list[str] | None = None) -> Component | None:
+    def make(
+        self, type: ModuleType, modules: list[str] | None = None
+    ) -> Component | None:
         if not modules:
             modules = ["*"]
 

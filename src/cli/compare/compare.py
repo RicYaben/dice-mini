@@ -1,23 +1,16 @@
-from typing import Annotated
-
-import typer
-
 from analysis.comparing import compare
 from dice.cli.tools import writer
 from dice.internal.database import new_connector
 from dice.internal.repository import new_repository
 
-compare_app = typer.Typer(help="Compare two datasets")
 
-
-@compare_app.command(name="compare")
 def diff(
     q: str,
-    d1: str = typer.Argument(help="Base dataset"),
-    d2: str = typer.Argument(help="Comparing dataset"),
-    fields: Annotated[str, typer.Option()] = "hosts,ports,services",
-    exclude: Annotated[str, typer.Option()] = "",
-    output: Annotated[str, typer.Option()] = "",
+    d1: str,
+    d2: str,
+    fields: str = "hosts,ports,services",
+    exclude: str = "",
+    output: str = "",
 ) -> None:
     flist = fields.split(",")
     if exclude:

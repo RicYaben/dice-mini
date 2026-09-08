@@ -1,5 +1,5 @@
 from cyclopts import App
 
-app = App()
+health = App()
 
-app.command("cli.health.health:health")
+health.command("cli.health.health:health")

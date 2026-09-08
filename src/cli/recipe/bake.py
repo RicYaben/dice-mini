@@ -1,58 +1,82 @@
+from enum import Enum
 from pathlib import Path
+from typing import Annotated
 
-from config.params import (
-    ConfigOptionsArg,
-    DatabaseOptionsArg,
-    ModuleOptionsArg,
-)
+from cyclopts import Parameter
+
 from dice.cli.tools import load_repository, writer
-from dice.internal.config import DiceConfig
 from dice.internal.recipe import new_builder
-from dice.shared.modules import MFACTORY, ModuleType
+from dice.shared.modules import (
+    ModuleType,
+    filter_module_types,
+    max_module_types,
+    module_type_aliases,
+)
+
+from .context import RecipeContext, configure_context
 
 
-def parse_command(cmd: str | None) -> list[ModuleType]:
-    if not cmd:
-        return []
+class Mode(int, Enum):
+    strict = 1
+    normal = 2
 
-    ts = MFACTORY.all()
-    mc = MFACTORY.get(cmd)
-    return ts[ts.index(mc) :]
 
-def parse_component_modules(command: str | None, components: str | None, modules: str | None) -> tuple[list[ModuleType], list[str]]:
-    comps = [c.strip() for c in components.split(",") if c.strip()] if components else []
+def parse_component_modules(
+    commands: str | None,
+    modules: str | None,
+    mode: Mode | None,
+) -> tuple[list[ModuleType], list[str]]:
+
     mods = [m.strip() for m in modules.split(",") if m.strip()] if modules else []
+    tps = [c.strip() for c in commands.split(",") if c.strip()] if commands else []
 
-    c = parse_command(command) if command else [MFACTORY.get(c) for c in comps]
-    if not (command or components):
-        c = [MFACTORY.get("s")]
+    match mode:
+        case Mode.strict | None:
+            mt = filter_module_types(tps)
+        case Mode.normal:
+            mt = max_module_types(tps)
+    return mt, mods
 
-    return c, mods
 
 def bake(
-    command: str | None,
-    components: str | None,
-    modules: str | None,
-    config: ConfigOptionsArg,
-    mconf: ModuleOptionsArg,
-    dconf: DatabaseOptionsArg,
-    run: bool = False,
-    store: Path | None = None,
+    ctx: RecipeContext,
+    *,
+    commands: Annotated[
+        str | None,
+        Parameter(
+            name=["--commands", "-C"],
+            choices=module_type_aliases(),
+            help="Command-separated list of commands to execute",
+        ),
+    ] = None,
+    modules: Annotated[
+        str | None,
+        Parameter(name=["--modules", "-M"], help="Comma-separated list of modules"),
+    ] = None,
+    mode: Annotated[
+        Mode | None,
+        Parameter(
+            name=["--mode", "-m"],
+            help="Mode to run the recipe in",
+        ),
+    ] = Mode.normal,
+    run: Annotated[
+        bool,
+        Parameter(
+            name=["--run", "-r"],
+            help="Run the recipe after baking",
+        ),
+    ] = False,
+    store: Annotated[
+        Path | None,
+        Parameter(
+            name=["--store", "-s"],
+            help="Path to store the baked workflow",
+        ),
+    ] = None,
 ):
-
-    conf = (
-        DiceConfig.load(config.configuration)
-        if config.configuration
-        else DiceConfig()
-    )
-
-    conf.override(
-        **config.overrides(),
-        modules=mconf.overrides(),
-        databases=dconf.overrides(),
-    )
-
-    comps, mods = parse_component_modules(command, components, modules)
+    comps, mods = parse_component_modules(commands, modules, mode)
+    conf = configure_context(ctx)
     wf = (
         new_builder()
         .registries(conf.modules.registries)

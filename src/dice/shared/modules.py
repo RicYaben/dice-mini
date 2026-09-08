@@ -59,8 +59,29 @@ for m in ModuleEnum:
     MFACTORY.register(m.value)
 
 
-def find_module(mod: str) -> ModuleType:
+def module_type_aliases() -> list[str]:
+    return list(MFACTORY._lookup.keys())
+
+
+def find_module_type(mod: str) -> ModuleType:
     return MFACTORY.get(mod)
+
+
+def filter_module_types(cmd: list[str]) -> list[ModuleType]:
+    mods = []
+    for c in MFACTORY._lookup:
+        if c in cmd:
+            mods.append(MFACTORY.get(c))
+    return mods
+
+
+def max_module_types(cmd: list[str]) -> list[ModuleType]:
+    for c in MFACTORY._lookup:
+        if c in cmd:
+            l = MFACTORY.all()
+            m = MFACTORY.get(c)
+            return l[l.index(m) :]
+    return []
 
 
 R = TypeVar("R", bound=BaseRepo)
@@ -156,7 +177,7 @@ class ModuleDescriptor(
 
     def __str__(self) -> str:
         lines: list[str] = []
-        m = find_module(self.t)
+        m = find_module_type(self.t)
         lines.append(f"module: {self.name} ({m.name})")
 
         if self.description:

@@ -2,9 +2,9 @@ import pandas as pd
 import ujson
 
 from analysis.tools import new_anonymizer, new_remover
+from dice._experimental.info import new_info
 from dice.cli.tools import load_repository
 from dice.internal.ast import make_parser
-from dice.internal.info import new_info
 from dice.shared.query import to_sql
 
 
@@ -49,6 +49,7 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
 def anonymize_col(df: pd.DataFrame, col: str):
     mapping = {v: i for i, v in enumerate(df[col].unique(), start=1)}
     df[col] = df[col].map(mapping)
+
 
 def search(
     query: str,

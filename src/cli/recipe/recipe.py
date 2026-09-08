@@ -1,32 +1,24 @@
-from config.params import (
-    ConfigOptionsArg,
-    DatabaseOptionsArg,
-    ModuleOptionsArg,
-)
+from typing import Annotated
+
+from cyclopts import Parameter
+
 from dice.cli.tools import load_cookbook, load_repository
-from dice.internal.config import DiceConfig
 from dice.internal.recipe import prepare
+
+from .context import RecipeContext, configure_context
 
 
 def recipe(
-    fpath: str,
-    config: ConfigOptionsArg,
-    mconf: ModuleOptionsArg,
-    dconf: DatabaseOptionsArg,
+    fpath: Annotated[
+        str,
+        Parameter(
+            name=["--fpath", "-f"],
+            help="Path to the recipe file. Can be a local file, a URL, or recipe ID. Note: Recipe IDs must be registered in the cookbook",
+        ),
+    ],
+    ctx: RecipeContext,
 ) -> None:
-
-    conf = (
-        DiceConfig.load(config.configuration)
-        if config.configuration
-        else DiceConfig()
-    )
-
-    conf.override(
-        **config.overrides(),
-        modules=mconf.overrides(),
-        databases=dconf.overrides(),
-    )
-
+    conf = configure_context(ctx)
     cb = load_cookbook(conf.databases.cookbook)
     rp = cb.resolve(fpath)
 

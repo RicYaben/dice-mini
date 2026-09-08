@@ -17,6 +17,12 @@ from .repository import Repository
 logger = logging.getLogger(__name__)
 
 
+class ResourceNotFoundError(Exception):
+    def __init__(self, res_id: int) -> None:
+        self.res_id = res_id
+        super().__init__(f"resource not found: {res_id}")
+
+
 def load_resource(s: Session, res_id: int) -> tuple[Resource, Cursor, Source]:
     stmt = (
         select(Resource, Cursor, Source)
@@ -49,7 +55,7 @@ class Sourcerer:
     @property
     def peek(self) -> pd.DataFrame | None:
         if not self._gen:
-            raise Exception("resource not loaded")
+            raise ResourceNotFoundError(self.res_id)
 
         if self._peeked:
             return self._peek

@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from importlib import import_module
 from importlib.metadata import entry_points
 
-from dice.shared.modules import ModuleDescriptor, ModuleEnum, ModuleType, find_module
+from dice.shared.modules import (
+    ModuleDescriptor,
+    ModuleEnum,
+    ModuleType,
+    find_module_type,
+)
 from dice.shared.repository import BaseRepo, CRepo, FRepo, TRepo
 
 from .repository import Repository
@@ -67,7 +72,7 @@ class ModuleRegistry:
         self.children: dict[str, ModuleRegistry] = {}
 
     def register(self, desc: ModuleDescriptor) -> "ModuleRegistry":
-        t = find_module(desc.t)
+        t = find_module_type(desc.t)
         mod = Module(t, desc)
         self.add(mod)
         return self

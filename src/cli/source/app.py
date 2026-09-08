@@ -1,5 +1,5 @@
 from cyclopts import App
 
-app = App()
+sources = App()
 
-app.command("cli.source.add:add")
+sources.command("cli.source.add:add")
