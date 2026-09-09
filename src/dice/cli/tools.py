@@ -24,7 +24,7 @@ def load_repository(
     return repo.load(monitor)
 
 
-def load_cookbook(db: str | None = None) -> Cookbook:
+def load_cookbook(db: str | Path | None = None) -> Cookbook:
     con = new_connector(db, CookbookModel)
     repo = new_repository(con)
     cb = new_cookbook(repo)

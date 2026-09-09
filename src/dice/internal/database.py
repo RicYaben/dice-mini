@@ -1,4 +1,5 @@
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 from sqlite3 import IntegrityError
 from typing import Any, Literal
 
@@ -75,11 +76,11 @@ def get_or_create(session: Session, model: type[DatabaseModel], **kwargs) -> tup
 class Connector:
     def __init__(
         self,
-        location: str | None,
+        location: str | Path | None,
         model: type[SQLModel] | None = None,
         driver: Literal["sqlite"] = "sqlite",
     ) -> None:
-        self.location: str = location if location else ":memory:"
+        self.location: str | Path = location if location else ":memory:"
         self.driver: str = driver
         self.engine: Engine | None = None
         self.model: type[SQLModel] | None = model
@@ -103,5 +104,5 @@ class Connector:
         return Session(self.connection())
 
 
-def new_connector(db: str | None, model: type[SQLModel] | None = None, name: Literal["sqlite"] = "sqlite") -> Connector:
+def new_connector(db: str | Path |None, model: type[SQLModel] | None = None, name: Literal["sqlite"] = "sqlite") -> Connector:
     return Connector(db, driver=name, model=model)

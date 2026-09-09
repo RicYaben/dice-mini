@@ -1,18 +1,18 @@
 import cyclopts
 
-app = cyclopts.App(name="dice-mini", help="dice-mini CLI")
+app = cyclopts.App("dice-mini", "dice-mini CLI")
 
-app.command("cli.recipe.recipe:recipe")
-app.command("cli.recipe.bake:bake")
+app.command("cli.recipes.recipe:recipe", group="D1", help="Run a recipe")
+app.command("cli.recipes.bake:bake", group="D1", help="Create a new recipe")
 
-app.command("cli.recipe.app:recipes")
-app.command("cli.modules.app:modules")
-app.command("cli.source.app:sources")
+app.command("cli.recipes.app:recipes", group="D2", help="List or show available recipes")
+app.command("cli.modules.app:modules", group="D2", help="List or show available modules")
+app.command("cli.sources.app:sources", group="D2", help="Import sources")
 
-app.command("cli.search.app:search")
-app.command("cli.compare.app:compare")
-app.command("cli.health.app:health")
+app.command("cli.health.app:health", group="D3", help="Sanitize results")
 
+app.command("cli.search.app:search", group="D4", help="Search results")
+app.command("cli.compare.app:compare", group="D4", help="Compare results")
 
 def main():
     app()

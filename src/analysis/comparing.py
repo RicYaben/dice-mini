@@ -8,8 +8,8 @@ import ujson
 from sqlalchemy import MetaData
 from tqdm import tqdm
 
+from dice._experimental.info import new_info
 from dice.internal.ast import make_parser
-from dice.internal.info import new_info
 from dice.internal.repository import Repository
 
 logger = logging.getLogger(__name__)
@@ -41,9 +41,7 @@ def is_empty(v):
         return True
     if isinstance(v, str) and v.strip() == "":
         return True
-    if isinstance(v, (list, dict, tuple, set)) and len(v) == 0:
-        return True
-    return False
+    return bool(isinstance(v, (list, dict, tuple, set)) and len(v) == 0)
 
 
 def is_equal(v1, v2):
@@ -148,6 +146,7 @@ def _parse_data(s):
             return d
     return d
 
+
 def diff_services(left, right):
     """
     Compare two services collections.
@@ -159,12 +158,10 @@ def diff_services(left, right):
 
     # map by (protocol, port)
     left_map = {
-        (s.get("protocol"), s.get("port")): s
-        for s in left if isinstance(s, dict)
+        (s.get("protocol"), s.get("port")): s for s in left if isinstance(s, dict)
     }
     right_map = {
-        (s.get("protocol"), s.get("port")): s
-        for s in right if isinstance(s, dict)
+        (s.get("protocol"), s.get("port")): s for s in right if isinstance(s, dict)
     }
 
     diffs = {}
@@ -183,7 +180,7 @@ def diff_services(left, right):
         v2 = _parse_data(right_map[k])
 
         if v1 != v2:
-            diffs[k] = compare_services(k[0], v1, v2) # type: ignore
+            diffs[k] = compare_services(k[0], v1, v2)  # type: ignore
 
     return diffs
 
@@ -230,7 +227,7 @@ def compare(
     parser = make_parser()
     q = parser.to_sql(query)
 
-    t, gen = r1.query(q)
+    res = r1.search(q)
     info_b = new_info(fields)
 
     c1 = r1.connect()
@@ -239,8 +236,8 @@ def compare(
     meta = MetaData()
     meta.reflect(bind=c1)
 
-    with tqdm(total=t, desc="compare") as pbar:
-        for df in gen:
+    with tqdm(total=res.count(), desc="compare") as pbar:
+        for df in res:
             ips = df.ip.tolist()
 
             q = info_b.make(ips)

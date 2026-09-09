@@ -1,5 +1,9 @@
-from dataclasses import dataclass
+from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated
+
+from cyclopts import Token
+from pydantic import BaseModel
 
 from config.params import (
     ConfigOptions,
@@ -10,8 +14,7 @@ from config.params import (
 from dice.internal.config import DiceConfig
 
 
-@dataclass
-class RecipeContext:
+class RecipeContext(BaseModel):
     config: Annotated[ConfigOptions, Parameter(group="Configuration")]
     modules: Annotated[ModuleOptions, Parameter(group="Modules")]
     database: Annotated[DatabaseOptions, Parameter(group="Databases")]
@@ -43,3 +46,23 @@ def configure_context(ctx: RecipeContext) -> DiceConfig:
     )
 
     return conf
+
+
+def token_converter(delimiter: str) -> Callable:
+    def handler(token: Token):
+        return [x.strip() for x in token.value.split(delimiter) if x.strip()]
+
+    return handler
+
+class RecipesContext(BaseModel):
+    recipes:  Annotated[
+        list[str] | None,
+        Parameter(
+            name=["--recipes", "-r"], help="Comma-separated list of recipes",
+            converter=token_converter(","),
+        ),
+    ] = None
+    cookbook: Annotated[
+        Path | None,
+        Parameter(name=["--cookbook", "-cb"], help="Path to the cookbook file"),
+    ] = None

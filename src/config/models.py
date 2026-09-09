@@ -84,11 +84,11 @@ class LogOptions(BaseModel):
 class DatabaseOptions(BaseModel):
     results: Annotated[
         Path | None,
-        Parameter(name=["--results", "-db"], help="Path to results"),
+        Parameter(name=["--results", "-res"], help="Path to results"),
     ] = None
     cookbook: Annotated[
         Path | None,
-        Parameter(name=["--cookbook", "-cdb"], help="Path to the cookbook file"),
+        Parameter(name=["--cookbook", "-cb"], help="Path to the cookbook file"),
     ] = None
 
     def overrides(self) -> dict:
