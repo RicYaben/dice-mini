@@ -119,7 +119,7 @@ class ComponentManager:
 
     def find(self, modules: list[str] | None = None) -> list[tuple[str, ModuleImpl]]:
         def matches_pattern(full_path_segments: list[str], pattern: str) -> bool:
-            pat_segments = pattern.split(":")
+            pat_segments = pattern.split(".")
             if len(pat_segments) == 1:
                 # single segment: match any segment or module
                 return any(
@@ -142,10 +142,9 @@ class ComponentManager:
 
             for m in registry.modules:
                 fpath_mod = path + [m.desc.name]
-
                 for pattern in mods:
                     if matches_pattern(fpath_mod, pattern):
-                        p = ":".join(path)
+                        p = ".".join(path)
                         m.registry = p
                         result.append((p, m))
                         break
@@ -184,6 +183,7 @@ class ComponentManager:
         if not modules:
             modules = ["*"]
         comps = []
+
         for t in types or MFACTORY.all():
             if c := self.make(t, modules):
                 comps.append(c)
@@ -197,6 +197,7 @@ class ComponentManager:
 
         if not (mods := self.get_modules(type, modules)):
             return None
+
         signature = new_signature(type, self.name, *mods)
         return new_component(type, self.name, signature)
 
