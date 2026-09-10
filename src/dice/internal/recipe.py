@@ -27,7 +27,7 @@ class Recipe:
         return {
             "version": self.version,
             "name": self.name,
-            "configuration": self.flags.root,
+            "flags": self.flags.root,
             "components": self.components.to_dict(),
             "requirements": self.requirements,
         }
@@ -60,7 +60,9 @@ class WorkflowBuilder:
         self._desc.flags.update_all(**kwargs)
         return self
 
-    def components(self, t: list[ModuleType], mods: list[str]) -> "WorkflowBuilder":
+    def components(
+        self, t: list[ModuleType] | None = None, mods: list[str] | None = None
+    ) -> "WorkflowBuilder":
         c = self._cmanager.build(t, mods)
         self._desc.components.extend(c)
         return self

@@ -12,7 +12,7 @@ from dice.shared.models import DatabaseModel
 
 
 def load_repository(
-    db: str | None = None,
+    db: str | Path | None = None,
 ) -> Repository:
     connector = new_connector(db, DatabaseModel)
     repo = new_repository(connector)
@@ -36,6 +36,7 @@ def writer_ctx(output: str | Path | None) -> object:
         return nullcontext(sys.stdout)
     return open(output, "+a")
 
+
 class Writer:
     def __init__(self, output: str | Path | None):
         self._ctx = writer_ctx(output)
@@ -45,6 +46,7 @@ class Writer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         return self._ctx.__exit__(exc_type, exc_val, exc_tb)
+
 
 def writer(output: str | Path | None) -> Writer:
     return Writer(output)

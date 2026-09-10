@@ -8,7 +8,7 @@ from dice.shared.modules import MFACTORY, ModuleType
 
 from .config import ModuleFlags
 from .modules import (
-    Module,
+    ModuleImpl,
     ModuleRegistry,
 )
 from .repository import Repository
@@ -26,7 +26,7 @@ class Component:
     signatures: list[Signature]
 
     @property
-    def modules(self) -> list[Module]:
+    def modules(self) -> list[ModuleImpl]:
         mods = []
         for s in self.signatures:
             mods.extend(s.modules)
@@ -65,7 +65,7 @@ class Components:
         self._comps = comps
 
     @property
-    def modules(self) -> list[Module]:
+    def modules(self) -> list[ModuleImpl]:
         mods = []
         for c in self._comps:
             mods.extend(c.modules)
@@ -117,7 +117,7 @@ class ComponentManager:
         self._registries.append(registry)
         return self
 
-    def find(self, modules: list[str] | None = None) -> list[tuple[str, Module]]:
+    def find(self, modules: list[str] | None = None) -> list[tuple[str, ModuleImpl]]:
         def matches_pattern(full_path_segments: list[str], pattern: str) -> bool:
             pat_segments = pattern.split(":")
             if len(pat_segments) == 1:
@@ -136,7 +136,7 @@ class ComponentManager:
 
         def collect(
             mods: list[str], registry: "ModuleRegistry", path: list[str]
-        ) -> list[tuple[str, Module]]:
+        ) -> list[tuple[str, ModuleImpl]]:
             result = []
             path.append(registry.name)
 
@@ -166,12 +166,13 @@ class ComponentManager:
 
     def get_modules(
         self, t: ModuleType | None = None, modules: list[str] | None = None
-    ) -> list[Module]:
+    ) -> list[ModuleImpl]:
         if not modules:
             modules = ["*"]
 
-        found = self.find(modules)
-        found = [m for _, m in found if m.t == t]
+        found = [m for _, m in self.find(modules)]
+        if t is not None:
+            found = filter(lambda m: m.t == t, found)
 
         # Deduplicate
         uniq = {id(m): m for m in found}

@@ -1,3 +1,5 @@
+from logging import getLogger
+
 import pandas as pd
 import ujson
 
@@ -6,6 +8,14 @@ from dice._experimental.info import new_info
 from dice.cli.tools import load_repository
 from dice.internal.ast import make_parser
 from dice.shared.query import to_sql
+
+logger = getLogger(__name__)
+
+
+class UnmarshallError(Exception):
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
 
 
 def normalize_services(services):
@@ -16,8 +26,8 @@ def normalize_services(services):
     if isinstance(services, str):
         try:
             services = ujson.loads(services)
-        except Exception as e:
-            print(e)  # Not going to handle this?
+        except ujson.JSONDecodeError as e:
+            logger.warning(f"Failed to unmarshal services: {e}")
             return []
 
     # single object → list
@@ -32,9 +42,10 @@ def normalize_services(services):
         s = dict(s)
         if "data" in s and isinstance(s["data"], str):
             try:
-                s["data"] = ujson.loads(s["data"])
-            except Exception as e:
-                print(e)  # Not going to handle this?
+                d = ujson.loads(s["data"])
+                s["data"] = d
+            except ujson.JSONDecodeError as e:
+                logger.warning(f"Failed to unmarshal data object: {e}")
         out.append(s)
 
     return out
@@ -48,7 +59,7 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
 
 def anonymize_col(df: pd.DataFrame, col: str):
     mapping = {v: i for i, v in enumerate(df[col].unique(), start=1)}
-    df[col] = df[col].map(mapping)
+    df[col] = df[col].map(mapping)  # pyright: ignore[reportArgumentType]
 
 
 def search(

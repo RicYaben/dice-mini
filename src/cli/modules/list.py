@@ -1,12 +1,13 @@
 from dice.internal.recipe import new_builder
 
+from .context import Context
+
 
 def list(
-    modules: str = "*",
-    registries: str | None = None,
+    ctx: Context | None = None,
 ) -> None:
-    recipe = new_builder()
-    if registries:
-        recipe.registries(registries.split(","))
+    if ctx is None:
+        ctx = Context()
 
-    recipe._cmanager.info(modules=modules.split(","))
+    recipe = new_builder().registries(ctx.registries)
+    recipe._cmanager.info(modules=ctx.modules)

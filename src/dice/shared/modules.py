@@ -2,14 +2,20 @@ import logging
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Generic, Protocol, TypeVar, cast
+from typing import Protocol, TypeVar, cast
 
 from .flags import Flags
 from .models import Label, Tag
 from .repository import BaseRepo
 
 
-@dataclass(frozen=True)
+class ModuleNotInitializedError(Exception):
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"Module {name} is not initialized")
+
+
+@dataclass(frozen=True, slots=True)
 class ModuleType:
     command: str
     name: str
@@ -88,6 +94,10 @@ R = TypeVar("R", bound=BaseRepo)
 F = TypeVar("F", bound=Flags)
 
 
+def do_nothing(*args, **kwargs) -> None:
+    return
+
+
 class Runner(
     Protocol[R, F]
 ):  # Needs to be like this, even if the lsp doesn't understand it
@@ -99,20 +109,11 @@ class Runner(
     ) -> None: ...
 
 
-def do_nothing(repo: BaseRepo, flags: Flags, logger: logging.Logger) -> None:
-    return
-
-
-class ModuleNotInitializedError(Exception):
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"Module {name} is not initialized")
-
-
 @dataclass
-class ModuleDescriptor(
-    Generic[R, F]
-):  # Needs to be like this, even if the lsp doesn't understand it
+class ModuleDescriptor[
+    R: BaseRepo,
+    F: Flags,
+]:
     t: str
     name: str
     description: str | None = None
@@ -145,13 +146,13 @@ class ModuleDescriptor(
 
     @property
     def repo(self) -> R:
-        if not self._repo:
+        if self._repo is None:
             raise ModuleNotInitializedError(self.name)
         return self._repo
 
     @property
     def rflags(self) -> F:
-        if not self._flags:
+        if self._flags is None:
             raise ModuleNotInitializedError(self.name)
         return self._flags
 

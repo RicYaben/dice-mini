@@ -1,6 +1,6 @@
-import glob
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterator
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -11,41 +11,34 @@ class UnsupportedFileExtensionError(Exception):
         super().__init__(f"unsupported file extension: {ext}")
 
 
-def walk(p: str):
-    """
-    Iterate over a list of paths that can be:
-      - Directories → yields all files in them recursively
-      - Glob patterns → yields matches
-      - File paths → yields the file if it exists
-    """
+def walk(p: str | Path) -> Iterator[Path]:
     path = Path(p)
-
-    if "*" in p or "?" in p or "[" in p:
-        # Glob pattern
-        for match in glob.iglob(p, recursive=True):
-            match_path = Path(match)
-            if match_path.is_file():
-                yield match_path
-    elif path.is_dir():
-        # Directory → recursively yield files
-        for f in path.rglob("*"):
-            if f.is_file():
-                yield f
-    elif path.is_file():
-        # Direct file path
+    if path.is_file():
         yield path
+        return
+
+    if path.is_dir():
+        yield from (f for f in path.rglob("*") if f.is_file())
+        return
+
+    # Treat non-existent paths as glob patterns.
+    yield from (f for f in path.parent.glob(path.name) if f.is_file())
 
 
 def extract_protocol_data(d: dict) -> tuple[str, dict]:
     try:
-        first_obj: dict = next(iter(d.values()))
-        protocol: str = first_obj.get("protocol", "-")
-        first_obj.update(first_obj["result"])
-        del first_obj["result"]
-
-        return protocol, first_obj
-    except Exception:
+        first_obj: dict[str, Any] = next(iter(d.values()))
+    except StopIteration:
         return "", {}
+
+    protocol: str = first_obj.get("protocol", "-")
+    if "result" not in first_obj:
+        return protocol, first_obj
+
+    first_obj.update(first_obj["result"])
+    del first_obj["result"]
+
+    return protocol, first_obj
 
 
 def zgrab2_loader_normalizer(df: pd.DataFrame) -> pd.DataFrame:
@@ -71,7 +64,6 @@ def jsonl_reader(p: Path, batch_size: int) -> Generator[pd.DataFrame, None, None
     reader = pd.read_json(
         p,
         lines=True,
-        #dtype=True,
         convert_dates=False,
         chunksize=batch_size,
         encoding="utf-8",
@@ -97,10 +89,9 @@ def get_reader(ext: str):
 
 
 def read_resource(
-    resource_id: int, fpath: str, batch_size: int
+    resource_id: int, fpath: Path, batch_size: int
 ) -> Generator[pd.DataFrame, None, None]:
-    p = Path(fpath)
-    reader = get_reader(p.suffixes[0])
-    for c in reader(p, batch_size):
+    reader = get_reader(fpath.suffixes[0])
+    for c in reader(fpath, batch_size):
         c["resource_id"] = resource_id
         yield c

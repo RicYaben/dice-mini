@@ -9,8 +9,10 @@ from tomlkit import dumps
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+
 class NoSectionError(Exception):
     pass
+
 
 class Config(BaseModel):
     @classmethod
@@ -22,6 +24,21 @@ class Config(BaseModel):
         with open(path, "w", encoding="utf-8") as f:
             f.write(dumps(self.model_dump()))
 
+    def override(self, **kwargs: Any) -> Self:
+        for key, value in kwargs.items():
+            if value is None:
+                continue
+
+            current = getattr(self, key, None)
+
+            if isinstance(current, Config) and isinstance(value, dict):
+                current.override(**value)
+            else:
+                setattr(self, key, value)
+
+        return self
+
+
 class ModuleFlags(RootModel[dict[str, dict[str, Any]]]):
     def update(self, module: str, **kwargs: Any) -> None:
         self.root.setdefault(module, {}).update(kwargs)
@@ -32,10 +49,11 @@ class ModuleFlags(RootModel[dict[str, dict[str, Any]]]):
         return self
 
     def __getitem__(self, module: str) -> dict[str, Any]:
-            return self.root[module]
+        return self.root[module]
 
     def __setitem__(self, module: str, values: dict[str, Any]) -> None:
         self.root[module] = values
+
 
 def load_flags(fpath: str | Path | None) -> ModuleFlags:
     if not fpath:
@@ -45,45 +63,33 @@ def load_flags(fpath: str | Path | None) -> ModuleFlags:
         return ModuleFlags.model_validate(tomllib.load(f))
 
 
-class ModulesConf(BaseModel):
+class ModulesConf(Config):
     registries: list[str] = Field(default_factory=list)
-    # this is a dict of module names to their configuration flags
-    flags: ModuleFlags = Field(default_factory=ModuleFlags)
+    flags: ModuleFlags = Field(default_factory=lambda: ModuleFlags({}))
 
-class DatabasesConf(BaseModel):
+
+class DatabasesConf(Config):
     results: str | None = None
     cookbook: str | None = None
 
-class LogsConf(BaseModel):
+
+class LogsConf(Config):
     level: int = logging.INFO
-    file: str | None = None
-    errors: str | None = None
+    logs: Path | None = None
+
 
 class DiceConfig(Config):
-    query_bsize: int = 50_000
+    batch_size: int = 50_000
     health: list[str] = Field(default_factory=list)
 
     databases: DatabasesConf = Field(default_factory=DatabasesConf)
     modules: ModulesConf = Field(default_factory=ModulesConf)
     logs: LogsConf = Field(default_factory=LogsConf)
 
-    def override(self, **kwargs: Any) -> Self:
-        for key, value in kwargs.items():
-            if value is None:
-                continue
-
-            current = getattr(self, key, None)
-
-            if isinstance(current, DiceConfig) and isinstance(value, dict):
-                current.override(**value)
-            else:
-                setattr(self, key, value)
-
-        return self
-
 
 def load_configuration(fpath: str | Path) -> DiceConfig:
     return DiceConfig.load(fpath)
+
 
 def make_configuration(fpath: str | Path | None = None) -> DiceConfig:
     if fpath is not None:

@@ -3,11 +3,11 @@ import pandas as pd
 from dataclasses import dataclass
 
 from dice.internal.config import ModuleEnum
-from dice.internal.modules import Module, new_module
+from dice.internal.modules import ModuleImpl, new_module
 from dice.sdk.query import query
 from dice._experimental.records import Access, Authentication, Connection, Maturity, Record, make_record
 
-def vuln_cls_init(mod: Module) -> None:
+def vuln_cls_init(mod: ModuleImpl) -> None:
     # Encryption
     mod.register_label(
         "unencrypted-communication",
@@ -64,22 +64,22 @@ class CPE:
     name: str
     maturity: Maturity
 
-def find_cpe(mod: Module, vendor: str = "*", product: str = "*") -> CPE | None:
+def find_cpe(mod: ModuleImpl, vendor: str = "*", product: str = "*") -> CPE | None:
     # 1. check the database first
     qcpe = "..."
     if row:= mod.repo().get_connection().execute(qcpe).fetchone():
         return CPE(last_version=row[0], name=row[1], maturity=row[2])
-    
+
     # 2. check the NVDE
     #cpe = f"cpe:a:{vendor.lower()}:{product.lower()}:-:*:*:*:*:*:*:*"
     raise NotImplementedError
 
-def fetch_cves(mod: Module, cpe: CPE) -> pd.DataFrame:
+def fetch_cves(mod: ModuleImpl, cpe: CPE) -> pd.DataFrame:
     # check the db for related cve's or fech from the NVDE or CVE api
     raise NotImplementedError
 
 
-def cpe_cls_handler(mod: Module) -> None:
+def cpe_cls_handler(mod: ModuleImpl) -> None:
     # 1. group by name of vendor and product/service
     q = "..."
     # 2. fetch all of those from the database
@@ -104,7 +104,7 @@ def cpe_cls_handler(mod: Module) -> None:
         cves: pd.DataFrame = fetch_cves(mod, cpe)
         if cves.empty:
             return
-        
+
         for v, group in ch.groupby("version"):
             # rows where this version is affected
             mask = (cves["from"] <= v) & (cves["to"] >= v)
@@ -118,9 +118,9 @@ def cpe_cls_handler(mod: Module) -> None:
                     mod.store(
                         mod.make_label(fid, "cve", row["cve"])
                     )
-    
 
-def vulnerable_cls_handler(mod: Module) -> None:
+
+def vulnerable_cls_handler(mod: ModuleImpl) -> None:
     def handler(row: pd.Series):
         fid = row["id"]
         record: Record = make_record(row)
@@ -128,7 +128,7 @@ def vulnerable_cls_handler(mod: Module) -> None:
         # connected
         if record.connection is not Connection.CONNECTED:
             return
-        
+
         # encryption
         if not record.encryption:
             mod.store(mod.make_label(fid, "unencrypted-communication"))
@@ -154,5 +154,5 @@ def vulnerable_cls_handler(mod: Module) -> None:
     q = query("fingerprint")
     mod.itemize(q, handler, orient="rows")
 
-def make_classifier() -> Module:
+def make_classifier() -> ModuleImpl:
     return new_module(ModuleEnum.CLASSIFIER.value, "vulnerable", vulnerable_cls_handler, vuln_cls_init)

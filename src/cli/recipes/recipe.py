@@ -5,7 +5,7 @@ from cyclopts import Parameter
 from dice.cli.tools import load_cookbook, load_repository
 from dice.internal.recipe import prepare
 
-from .context import RecipeContext, configure_context
+from .context import RecipeContextOptions, configure_context
 
 
 def recipe(
@@ -16,9 +16,9 @@ def recipe(
             help="Path to the recipe file. Can be a local file, a URL, or recipe ID. Note: Recipe IDs must be registered in the cookbook",
         ),
     ],
-    ctx: RecipeContext,
+    opts: RecipeContextOptions | None = None,
 ) -> None:
-    conf = configure_context(ctx)
+    conf = configure_context(opts)
     cb = load_cookbook(conf.databases.cookbook)
     rp = cb.resolve(fpath)
 
