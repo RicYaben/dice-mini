@@ -1,5 +1,7 @@
 from cyclopts import App
 
+from .compare import diff
+
 compare = App(name="compare")
 
-compare.command("cli.compare.compare:diff")
+compare.default(diff)

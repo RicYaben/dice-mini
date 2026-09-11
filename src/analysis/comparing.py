@@ -1,6 +1,6 @@
 import logging
+from collections.abc import Generator
 from difflib import ndiff
-from typing import TextIO
 
 import numpy as np
 import pandas as pd
@@ -206,46 +206,42 @@ def differences(src: pd.DataFrame, dst: pd.DataFrame) -> pd.DataFrame:
 
     # Filter rows where ports_diff is not empty
     out = out[(out["ports_diff"].astype(bool)) | (out["services_diff"].astype(bool))]
-
     return out.reset_index(drop=True)
 
 
-def dump(df, writer: TextIO):
-    records = df.to_dict(orient="records")
-    for r in records:
-        ujson.dump(r, writer)
-        writer.write("\n")
-
-
 def compare(
-    r1: Repository,
-    r2: Repository,
-    query: str,
-    fields: list[str],
-    output: TextIO,
-) -> None:
+    left: Repository,
+    right: Repository,
+    query: str | None = None,
+    fields: list[str] | None = None,
+) -> Generator[list[dict], None, None]:
+    if query is None:
+        query = ""
+
+    if fields is None:
+        fields = ["all"]
+
     parser = make_parser()
     q = parser.to_sql(query)
-
-    res = r1.search(q)
+    left_base = left.search(q)
     info_b = new_info(fields)
 
-    c1 = r1.connect()
-    c2 = r2.connect()
+    left_con = left.connect()
+    right_con = right.connect()
 
     meta = MetaData()
-    meta.reflect(bind=c1)
+    meta.reflect(bind=left_con)
 
-    with tqdm(total=res.count(), desc="compare") as pbar:
-        for df in res:
+    with tqdm(total=left_base.count(), desc="compare") as pbar:
+        for df in left_base:
             ips = df.ip.tolist()
 
             q = info_b.make(ips)
 
-            src_df = pd.read_sql(q, c1)
-            dst_df = pd.read_sql(q, c2)
+            src_df = pd.read_sql(q, left_con)
+            dst_df = pd.read_sql(q, right_con)
 
             difs = differences(src_df, dst_df)
-            dump(difs, output)
+            yield difs.to_dict(orient="records")
 
             pbar.update(len(ips))
