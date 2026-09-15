@@ -27,9 +27,8 @@ class Model(SQLModel):
     def from_dataframe(cls, df: pd.DataFrame):
         return [cls.from_series(row) for _, row in df.iterrows()]
 
-class DatabaseModel(Model):
-    ...
 
+class DatabaseModel(Model): ...
 
 
 class Source(DatabaseModel, table=True):
@@ -93,8 +92,15 @@ class Host(DatabaseModel, table=True):
 
 
 class Fingerprint(DatabaseModel, table=True):
-    host: str | None = Field(default=None, foreign_key="host.ip")
-    record_id: int | None = Field(default=None, foreign_key="record.id")
+    host: str | None = Field(
+        default=None,
+        foreign_key="host.ip",
+        index=True,
+    )
+    record_id: int | None = Field(
+        default=None,
+        foreign_key="record.id",
+    )
 
     data: dict = Field(sa_column=Column(JSON))
     module_name: str | None = None
@@ -113,8 +119,16 @@ class Label(DatabaseModel, table=True):
 
 
 class FingerprintLabel(DatabaseModel, table=True):
-    fingerprint_id: int | None = Field(default=None, foreign_key="fingerprint.id")
-    label_id: int | None = Field(default=None, foreign_key="label.id")
+    fingerprint_id: int | None = Field(
+        default=None,
+        foreign_key="fingerprint.id",
+        index=True,
+    )
+    label_id: int | None = Field(
+        default=None,
+        foreign_key="label.id",
+        index=True,
+    )
 
     __table_args__ = (UniqueConstraint("fingerprint_id", "label_id"),)
 
@@ -126,8 +140,17 @@ class Tag(DatabaseModel, table=True):
 
 
 class HostTag(DatabaseModel, table=True):
-    host: str | None = Field(default=None, foreign_key="host.ip")
-    tag_id: int | None = Field(default=None, foreign_key="tag.id")
+    host: str | None = Field(
+        default=None,
+        foreign_key="host.ip",
+        index=True,
+    )
+    tag_id: int | None = Field(
+        default=None,
+        foreign_key="tag.id",
+        index=True,
+    )
+
     details: str | None = None
     protocol: str | None = None
     port: int | None = None

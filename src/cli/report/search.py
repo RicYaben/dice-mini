@@ -4,10 +4,13 @@ import pandas as pd
 import ujson
 
 from analysis.tools import new_anonymizer, new_remover
-from dice._experimental.info import new_info
+from dice.cli.config.args import BatchSizeArg, ResultsArg
 from dice.cli.tools import load_repository
 from dice.internal.ast import make_parser
+from dice.internal.report import ReportBuilder, ReportOptions
 from dice.shared.query import to_sql
+
+from .context import SearchOptions, make_context
 
 logger = getLogger(__name__)
 
@@ -57,58 +60,48 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def anonymize_col(df: pd.DataFrame, col: str):
-    mapping = {v: i for i, v in enumerate(df[col].unique(), start=1)}
-    df[col] = df[col].map(mapping)  # pyright: ignore[reportArgumentType]
-
-
 def search(
-    query: str,
-    database: str | None = None,
-    limit: int | None = None,
-    # TODO: store mappings
-    anonymize: str | None = None,
-    mappings: str | None = None,
-    remove: str | None = None,
-    fields: str = "ports,services,labels,tags",
-    exclude: str | None = None,
-    batch: int | None = 50_000,
+    opts: SearchOptions | None = None,
+    results: ResultsArg | None = None,
+    bsize: BatchSizeArg = 50_000,
 ) -> None:
-    flist = fields.split(",")
-    parser = make_parser()
-    qt = parser.to_sql(query)
+    ctx = make_context(opts)
 
-    repo = load_repository(db=database)
-    res = repo.search(qt, limit=limit)
+    qt = make_parser().to_sql(ctx.search.query or "")
+
+    repo = load_repository(db=results)
+    res = repo.search(
+        qt, limit=ctx.search.limit
+    )  # TODO: add offset (pagination support)
+
     n = res.count()
-
-    print(f"found {n} hosts")
-    if not n:
+    if n == 0:
+        print("Query returned no results: ", ctx.search.query or "<empty>")
         return
+    print(f"Found {n} hosts")
 
     procs = [normalize]
-    if remove:
-        rlist = remove.split(",")
-        rm = new_remover(rlist)
+    if rfields := ctx.anonimizer.remove:
+        rm = new_remover(rfields)
         procs.append(rm.remove)
 
-    if anonymize:
-        clist = anonymize.split(",")
-        anzr = new_anonymizer(clist, mappings)
+    if afields := ctx.anonimizer.anonimize:
+        anzr = new_anonymizer(afields, ctx.anonimizer.output)
         procs.append(anzr.anonymize)
 
-    if exclude:
-        flist = list(set(flist) - set(exclude.split(",")))
+    flist = ctx.search.include or []
+    if exclude := ctx.search.exclude:
+        flist = list(set(flist) - set(exclude))
 
-    info_b = new_info(flist)
+    options = ReportOptions.from_fields(flist)
+    rbuilder = ReportBuilder(options)
 
-    for b in res.df(batch):
-        ips = b["ip"].tolist()  # type: ignore
-        qs = info_b.make(ips)
-        rows = repo.search(to_sql(qs)).all()
-        df = pd.DataFrame(rows)
+    for batch in res.batch(bsize):
+        ips = [row.ip for row in batch]
+        qs = rbuilder.build(ips)
+        rows = repo.search(to_sql(qs)).df()
 
-        for p in procs:
-            df = p(df)
-
-        print(df.to_json(orient="records", lines=True, force_ascii=False))
+        assert isinstance(rows, pd.DataFrame)
+        for proc in procs:
+            rows = proc(rows)
+        print(rows)

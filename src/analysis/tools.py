@@ -60,14 +60,14 @@ def count_multi_groups(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
 
 class Anonymizer:
-    def __init__(self, cols: list[str], out: str | None = None) -> None:
+    def __init__(self, cols: list[str], out: Path | None = None) -> None:
         self.cols = cols
-        self.mappings = {}
+        self._mappings = {}
         self._out = None
         self.out = out
 
         if (o := self.out) and o.exists():
-            self.mappings = ujson.loads(o.read_text())
+            self._mappings = ujson.loads(o.read_text())
             return
 
     @property
@@ -75,13 +75,13 @@ class Anonymizer:
         return self._out
 
     @out.setter
-    def out(self, fpath: str | None) -> None | Path:
+    def out(self, fpath: Path | None) -> None | Path:
         if fpath:
-            self._out = Path(fpath)
+            self._out = fpath
 
     def _save(self):
         if self.out:
-            self.out.write_text(ujson.dumps(self.mappings, indent=2))
+            self.out.write_text(ujson.dumps(self._mappings, indent=2))
 
     def anonymize(self, df: pd.DataFrame) -> pd.DataFrame:
         for col in self.cols:
@@ -95,10 +95,10 @@ class Anonymizer:
         if not isinstance(obj, dict):
             return obj
 
-        if field_key not in self.mappings:
-            self.mappings[field_key] = {}
+        if field_key not in self._mappings:
+            self._mappings[field_key] = {}
 
-        mapping = self.mappings[field_key]
+        mapping = self._mappings[field_key]
         next_id = max(mapping.values(), default=0) + 1
 
         val = extract_fn(obj)
@@ -120,10 +120,10 @@ class Anonymizer:
         return obj
 
     def _map_series(self, series: pd.Series, field_key: str) -> pd.Series:
-        if field_key not in self.mappings:
-            self.mappings[field_key] = {}
+        if field_key not in self._mappings:
+            self._mappings[field_key] = {}
 
-        mapping = self.mappings[field_key]
+        mapping = self._mappings[field_key]
 
         new_value = max(mapping.values(), default=0) + 1
 
@@ -158,10 +158,10 @@ class Anonymizer:
             if not isinstance(obj, dict):
                 return obj
 
-            if field_key not in self.mappings:
-                self.mappings[field_key] = {}
+            if field_key not in self._mappings:
+                self._mappings[field_key] = {}
 
-            mapping = self.mappings[field_key]
+            mapping = self._mappings[field_key]
             next_id = max(mapping.values(), default=0) + 1
 
             # walk to value
@@ -190,7 +190,7 @@ class Anonymizer:
         df[base_col] = df.apply(update, axis=1)
 
 
-def new_anonymizer(cols: list[str], out: str | None) -> Anonymizer:
+def new_anonymizer(cols: list[str], out: Path | None = None) -> Anonymizer:
     return Anonymizer(cols, out)
 
 
