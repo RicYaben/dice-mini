@@ -6,7 +6,7 @@ from typing import Annotated
 import ujson
 from cyclopts import Parameter
 
-from dice.internal.config import ModuleFlags, load_flags
+from dice.modules import flags
 from dice.shared.modules import (
     ModuleType,
     filter_module_types,
@@ -44,7 +44,7 @@ class ConfigOptions:
 @dataclass
 class ModuleOptions:
     registries: RegistriesArg | None = None
-    flags: Annotated[
+    fl: Annotated[
         Path | None,
         Parameter(name=["--flags", "-Mf"], help="Path to module flags file"),
     ] = None
@@ -54,15 +54,14 @@ class ModuleOptions:
     ] = None
 
     def to_dict(self) -> dict:
-        flags = load_flags(self.flags) if self.flags else ModuleFlags({})
-
+        fgs = flags(self.fl)
         if self.params is not None:
             params = ujson.loads(self.params)
-            flags.update_all(**params)
+            fgs.update_all(**params)
 
         return {
             "registries": (self.registries),
-            "flags": flags,
+            "flags": fgs,
         }
 
 

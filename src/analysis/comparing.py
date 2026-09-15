@@ -8,6 +8,7 @@ import ujson
 from sqlalchemy import MetaData
 from tqdm import tqdm
 
+# TODO: this has to go, no experimental, no internal
 from dice._experimental.info import new_info
 from dice.internal.ast import make_parser
 from dice.shared.repository import Repository
