@@ -1,4 +1,4 @@
-from dice.cli.tools import load_cookbook
+from dice.recipes import cookbook
 
 from .context import RecipesContext
 
@@ -6,7 +6,7 @@ from .context import RecipesContext
 def show(
     ctx: RecipesContext,
 ):
-    cb = load_cookbook(ctx.cookbook)
+    cb = cookbook(ctx.cookbook)
     for recipe in cb.search(ctx.recipes):
         r = cb.resolve(recipe.path)
         print(r.to_dict())

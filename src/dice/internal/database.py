@@ -53,9 +53,15 @@ def insert_or_ignore(
     return result
 
 
-def get_or_create(session: Session, model: type[DatabaseModel], **kwargs) -> tuple[Any, bool]:
+def get(session: Session, model: type[DatabaseModel], **kwargs):
+    return session.exec(select(model).filter_by(**kwargs)).first()
+
+
+def get_or_create(
+    session: Session, model: type[DatabaseModel], **kwargs
+) -> tuple[Any, bool]:
     # Try to get existing
-    obj = session.exec(select(model).filter_by(**kwargs)).first()  # type: ignore
+    obj = get(session, model)
     if obj:
         return obj, False
 
@@ -104,5 +110,9 @@ class Connector:
         return Session(self.connection())
 
 
-def new_connector(db: str | Path |None, model: type[SQLModel] | None = None, name: Literal["sqlite"] = "sqlite") -> Connector:
+def new_connector(
+    db: str | Path | None,
+    model: type[SQLModel] | None = None,
+    name: Literal["sqlite"] = "sqlite",
+) -> Connector:
     return Connector(db, driver=name, model=model)

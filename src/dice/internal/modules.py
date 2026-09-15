@@ -12,9 +12,7 @@ from dice.shared.modules import (
     ModuleType,
     find_module_type,
 )
-from dice.shared.repository import BaseRepo, CRepo, FRepo, TRepo
-
-from .repository import Repository
+from dice.shared.repository import BaseRepo, CRepo, FRepo, Repository, TRepo
 
 logger = logging.getLogger(__name__)
 

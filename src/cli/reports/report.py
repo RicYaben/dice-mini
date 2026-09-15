@@ -3,14 +3,17 @@ from logging import getLogger
 import pandas as pd
 import ujson
 
+# TODO: move analysis tools to shared `reports` package
 from analysis.tools import new_anonymizer, new_remover
 from dice.cli.config.args import BatchSizeArg, ResultsArg
-from dice.cli.tools import load_repository
-from dice.internal.ast import make_parser
-from dice.internal.report import ReportBuilder, ReportOptions
-from dice.shared.query import to_sql
 
-from .context import SearchOptions, make_context
+# TODO: remove internal references
+from dice.internal.ast import make_parser
+from dice.results import results
+from dice.shared.query import to_sql
+from dice.shared.report import ReportBuilder, ReportFields
+
+from .context import ReportOptions, make_context
 
 logger = getLogger(__name__)
 
@@ -60,16 +63,16 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def search(
-    opts: SearchOptions | None = None,
-    results: ResultsArg | None = None,
+def report(
+    opts: ReportOptions | None = None,
+    fpath: ResultsArg | None = None,
     bsize: BatchSizeArg = 50_000,
 ) -> None:
     ctx = make_context(opts)
 
     qt = make_parser().to_sql(ctx.search.query or "")
 
-    repo = load_repository(db=results)
+    repo = results(fpath)
     res = repo.search(
         qt, limit=ctx.search.limit
     )  # TODO: add offset (pagination support)
@@ -93,7 +96,7 @@ def search(
     if exclude := ctx.search.exclude:
         flist = list(set(flist) - set(exclude))
 
-    options = ReportOptions.from_fields(flist)
+    options = ReportFields.from_fields(flist)
     rbuilder = ReportBuilder(options)
 
     for batch in res.batch(bsize):

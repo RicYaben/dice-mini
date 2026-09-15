@@ -1,10 +1,10 @@
 import logging
 
+# from .monitor import Monitor
+from dice.shared.repository import Repository
+
 from .components import Components
 from .config import ModuleFlags
-
-# from .monitor import Monitor
-from .repository import Repository
 
 logger = logging.getLogger(__name__)
 

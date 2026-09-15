@@ -21,6 +21,7 @@ from .args import (
     RegistriesArg,
     ResultsArg,
 )
+from .helpers import token_converter
 
 
 @dataclass
@@ -108,3 +109,40 @@ class CommandOptions:
                 return filter_module_types(self.commands)
             case Mode.normal:
                 return max_module_types(self.commands)
+
+
+@dataclass
+class SearchOptions:
+    query: Annotated[
+        str | None, Parameter(name=["--query", "-q"], help="Search query")
+    ] = None
+    include: Annotated[
+        list[str] | None,
+        Parameter(
+            name=["--include", "-i"],
+            help="Comma-separated list of columns to include",
+            converter=token_converter(","),
+        ),
+    ] = None
+    exclude: Annotated[
+        list[str] | None,
+        Parameter(
+            name=["--exclude", "-e"],
+            help="Comma-separated list of columns to exclude",
+            converter=token_converter(","),
+        ),
+    ] = None
+    limit: Annotated[
+        int | None,
+        Parameter(
+            name=["--limit", "-l"],
+            help="Limit the number of results",
+        ),
+    ] = None
+    offset: Annotated[
+        int | None,
+        Parameter(
+            name=["--offset", "-o"],
+            help="Offset the results",
+        ),
+    ] = None

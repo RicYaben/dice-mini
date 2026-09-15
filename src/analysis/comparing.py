@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from dice._experimental.info import new_info
 from dice.internal.ast import make_parser
-from dice.internal.repository import Repository
+from dice.shared.repository import Repository
 
 logger = logging.getLogger(__name__)
 

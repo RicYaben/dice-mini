@@ -96,7 +96,9 @@ class Repository(R):
         gen = self.queryb(q, bsize, norm, limit)
         return (d, gen)
 
-    def search(self, q: str, limit: int | None = None) -> SearchResult:
+    def search(
+        self, q: str, limit: int | None = None, offset: int | None = None
+    ) -> SearchResult:
         if limit:
             q += f" LIMIT {limit}"
 
@@ -106,6 +108,9 @@ class Repository(R):
         con.execute(text(f"CREATE TEMP VIEW {view} AS {q}"))
 
         return SearchResult(con, view)
+
+    def synchronize(self) -> None:
+        return self.monitor.sanity()
 
 
 def query_batch(

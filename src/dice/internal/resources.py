@@ -5,16 +5,15 @@ from itertools import chain
 from pathlib import Path
 
 import pandas as pd
-import ujson
 from sqlalchemy import Connection
 from sqlmodel import Session, col, select
 from tqdm import tqdm
 
 from dice.shared.models import Cursor, Record, Resource, Source
+from dice.shared.repository import Repository
 
 from .database import get_or_create
 from .loaders import get_loader_normalizer, read_resource
-from .repository import Repository
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +112,9 @@ class Sourcerer:
         self, df: pd.DataFrame, res_id: int, ic: list[str]
     ) -> pd.DataFrame:
         # convert to int64 numeric cols
-        for col in ic:
-            df[col] = pd.to_numeric(
-                df[col], errors="coerce", dtype_backend="pyarrow", downcast="float"
+        for c in ic:
+            df[c] = pd.to_numeric(
+                df[c], errors="coerce", dtype_backend="pyarrow", downcast="float"
             )
 
         df["resource_id"] = res_id

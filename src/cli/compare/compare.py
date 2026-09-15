@@ -2,9 +2,10 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
+# TODO: move analysis package to shared reports
 from analysis.comparing import compare
-from dice.internal.database import new_connector
-from dice.internal.repository import new_repository
+from dice.cli.config.models import SearchOptions
+from dice.results import results
 
 
 def diff(
@@ -14,30 +15,17 @@ def diff(
     right: Annotated[
         str, Parameter(name=["--right", "-r"], help="Path to the second dice database.")
     ],
-    q: Annotated[
-        str | None, Parameter(name=["--query", "-q"], help="query to execute.")
-    ] = None,
-    fields: Annotated[
-        str,
-        Parameter(
-            name=["--fields", "-f"],
-            help="Comma-separated list of fields to include in the comparison.",
-        ),
-    ] = "hosts,ports,services",
-    exclude: Annotated[
-        str | None,
-        Parameter(
-            name=["--exclude", "-e"],
-            help="Comma-separated list of fields to exclude from the comparison.",
-        ),
-    ] = None,
+    opts: SearchOptions | None = None,
 ) -> None:
-    flist = fields.split(",")
-    if exclude:
-        flist = list(set(flist) - set(exclude.split(",")))
+    if opts is None:
+        opts = SearchOptions()
 
-    r1 = new_repository(new_connector(left))
-    r2 = new_repository(new_connector(right))
+    flist = opts.include or []
+    if exclude := opts.exclude:
+        flist = list(set(flist) - set(exclude))
 
-    for result in compare(r1, r2, q, flist):
+    r1 = results(left)
+    r2 = results(right)
+
+    for result in compare(r1, r2, opts.query, flist):
         print(result)

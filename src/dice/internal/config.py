@@ -69,8 +69,8 @@ class ModulesConf(Config):
 
 
 class DatabasesConf(Config):
-    results: str | None = None
-    cookbook: str | None = None
+    results: Path | None = None
+    cookbook: Path | None = None
 
 
 class LogsConf(Config):

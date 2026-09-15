@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from tabulate import tabulate
 
 from dice.shared.modules import MFACTORY, ModuleType
+from dice.shared.repository import Repository
 
 from .config import ModuleFlags
 from .modules import (
     ModuleImpl,
     ModuleRegistry,
 )
-from .repository import Repository
 from .signatures import Signature, new_signature
 
 logger = logging.getLogger(__name__)

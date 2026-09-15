@@ -9,6 +9,8 @@ from dice.cli.config.models import (
     ModuleOptions,
     Parameter,
 )
+
+# TODO: remove references to internal packages
 from dice.internal.config import DiceConfig
 
 

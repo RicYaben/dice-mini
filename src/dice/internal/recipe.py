@@ -2,15 +2,15 @@ from dataclasses import dataclass, field
 from importlib.metadata import version
 
 from dice.shared.modules import MFACTORY, ModuleType
+
+# from .monitor import monitor
+from dice.shared.repository import Repository
 from modules import registry
 
 from .components import ComponentManager, Components
 from .config import ModuleFlags
 from .engine import Engine, new_engine
 from .modules import load_registry_plugins
-
-# from .monitor import monitor
-from .repository import Repository
 
 
 @dataclass
@@ -122,7 +122,7 @@ def new_builder() -> WorkflowBuilder:
     return WorkflowBuilder()
 
 
-def prepare(desc: Recipe) -> WorkflowBuilder:
+def from_recipe(desc: Recipe) -> WorkflowBuilder:
     return new_builder().descriptor(desc)
 
 

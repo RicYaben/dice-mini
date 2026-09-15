@@ -3,18 +3,26 @@ from typing import Any
 
 from sqlalchemy import JSON, Select, func, select, type_coerce
 
-from dice.shared.models import Fingerprint, FingerprintLabel, Host, HostTag, Label, Tag
+from dice.shared.models import (
+    Fingerprint,
+    FingerprintLabel,
+    Host,
+    HostTag,
+    Label,
+    Record,
+    Tag,
+)
 
 
 @dataclass(frozen=True)
-class ReportOptions:
+class ReportFields:
     ports: bool = False
     services: bool = False
     tags: bool = False
     labels: bool = False
 
     @classmethod
-    def all(cls) -> "ReportOptions":
+    def all(cls) -> "ReportFields":
         return cls(
             ports=True,
             services=True,
@@ -23,7 +31,7 @@ class ReportOptions:
         )
 
     @classmethod
-    def from_fields(cls, fields: list[str]) -> "ReportOptions":
+    def from_fields(cls, fields: list[str]) -> "ReportFields":
         if "all" in fields:
             return cls.all()
 
@@ -48,7 +56,7 @@ class Report:
 
 
 class ReportBuilder:
-    def __init__(self, options: ReportOptions):
+    def __init__(self, options: ReportFields):
         self.options = options
 
     def _fingerprints(self, hosts: list[str]):
