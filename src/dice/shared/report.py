@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import JSON, Select, func, select, type_coerce
+from sqlalchemy import CTE, JSON, Select, func, select, type_coerce
 
 from dice.shared.models import (
     Fingerprint,
@@ -56,10 +56,10 @@ class Report:
 
 
 class ReportBuilder:
-    def __init__(self, options: ReportFields):
-        self.options = options
+    def __init__(self, fields: ReportFields):
+        self.fields = fields
 
-    def _fingerprints(self, hosts: list[str]):
+    def _fingerprints(self, hosts: list[str]) -> CTE:
         return (
             select(
                 Fingerprint.host.label("ip"),
@@ -77,7 +77,7 @@ class ReportBuilder:
         )
 
     @staticmethod
-    def _fingerprint_labels(fingerprints):
+    def _fingerprint_labels(fingerprints) -> CTE:
         return (
             select(
                 fingerprints.c.fingerprint_id,
@@ -96,15 +96,15 @@ class ReportBuilder:
             .cte("fingerprint_labels")
         )
 
-    def _fingerprint_info(self, fingerprints):
+    def _fingerprint_info(self, fingerprints) -> CTE:
         columns = [fingerprints.c.ip]
 
         fingerprint_labels = None
 
-        if self.options.services:
+        if self.fields.services:
             fingerprint_labels = self._fingerprint_labels(fingerprints)
 
-        if self.options.ports:
+        if self.fields.ports:
             ports = (
                 func.json_group_array(func.distinct(fingerprints.c.port))
                 .filter(fingerprints.c.port.is_not(None))
@@ -113,7 +113,7 @@ class ReportBuilder:
 
             columns.append(ports)
 
-        if self.options.services:
+        if self.fields.services:
             labels = func.coalesce(
                 fingerprint_labels.c.labels,
                 func.json_array(),
@@ -145,7 +145,7 @@ class ReportBuilder:
         return stmt.group_by(fingerprints.c.ip).cte("fingerprint_info")
 
     @staticmethod
-    def _host_labels(fingerprints):
+    def _host_labels(fingerprints) -> CTE:
         return (
             select(
                 fingerprints.c.ip,
@@ -165,7 +165,7 @@ class ReportBuilder:
         )
 
     @staticmethod
-    def _tags(hosts: list[str]):
+    def _tags(hosts: list[str]) -> CTE:
         return (
             select(
                 HostTag.host.label("ip"),
@@ -200,22 +200,18 @@ class ReportBuilder:
 
         fingerprints = None
 
-        needs_fingerprints = (
-            self.options.ports or self.options.services or self.options.labels
-        )
-
-        if needs_fingerprints:
+        if self.fields.ports or self.fields.services or self.fields.labels:
             fingerprints = self._fingerprints(hosts)
 
-        if self.options.ports or self.options.services:
+        if self.fields.ports or self.fields.services:
             fingerprint_info = self._fingerprint_info(fingerprints)
 
-            if self.options.ports:
+            if self.fields.ports:
                 stmt = stmt.add_columns(
                     self._json_array(fingerprint_info.c.ports).label("ports")
                 )
 
-            if self.options.services:
+            if self.fields.services:
                 stmt = stmt.add_columns(
                     self._json_array(fingerprint_info.c.services).label("services")
                 )
@@ -225,7 +221,7 @@ class ReportBuilder:
                 fingerprint_info.c.ip == Host.ip,
             )
 
-        if self.options.labels:
+        if self.fields.labels:
             host_labels = self._host_labels(fingerprints)
 
             stmt = stmt.add_columns(
@@ -237,7 +233,7 @@ class ReportBuilder:
                 host_labels.c.ip == Host.ip,
             )
 
-        if self.options.tags:
+        if self.fields.tags:
             tags = self._tags(hosts)
 
             stmt = stmt.add_columns(self._json_array(tags.c.tags).label("tags"))
