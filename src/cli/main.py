@@ -15,12 +15,11 @@ app.command(
 app.command(
     "cli.modules.app:modules", group=tools, help="List or show available modules"
 )
-app.command("cli.sources.app:sources", group="D2", help="Import sources")
-app.command("cli.health.app:health", group="D3", help="Sanitize results")
-app.command("cli.report.app:reports", group=reporting, help="Generate reports")
+app.command("cli.sources.app:sources", group=tools, help="Import sources")
+app.command("cli.health.app:health", group=tools, help="Sanitize results")
 # TODO: would be interesting to have reports.compare instead of this comparator between databases
 # that way we can remove the need for a query? both functionalities can live together
-app.command("cli.compare.app:compare", group=reporting, help="Compare results")
+app.command("cli.report.app:reports", group=reporting, help="Generate reports")
 
 
 def main():

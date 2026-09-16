@@ -15,16 +15,18 @@ class SearchResult:
         self,
         con: Connection,
         view: str,
+        bsize: int | None = None,
     ):
         self.con = con
         self.view = view
+        self.bsize = bsize
 
     def query(self, q: str) -> CursorResult:
         return self.con.execute(text(q))
 
-    def batch(self, bsize: int = 50_000) -> Generator[Sequence[RowMapping]]:
+    def batch(self, bsize: int | None = None) -> Generator[Sequence[RowMapping]]:
         res = self.query(f"SELECT * FROM {self.view}").mappings()
-        while rows := res.fetchmany(bsize):
+        while rows := res.fetchmany(bsize or self.bsize):
             yield rows
 
     def stream(self) -> Generator[RowMapping]:
@@ -34,10 +36,7 @@ class SearchResult:
                 bar.update(len(b))
 
     def all(self) -> list[dict]:
-        res = self.query(f"SELECT * FROM {self.view}")
-        cols = res.keys()
-
-        return [dict(zip(cols, row)) for row in res.fetchall()]
+        return [dict(row) for row in self.stream()]
 
     def one(self) -> dict:
         res = self.query(f"SELECT * FROM {self.view}")

@@ -1,10 +1,11 @@
 import logging
 import warnings
 from collections.abc import Generator, Sequence
+from typing import overload
 from uuid import uuid4
 
 import pandas as pd
-from sqlalchemy import Connection
+from sqlalchemy import Connection, Select
 from sqlmodel import Session, text
 
 from dice.shared.interfaces import Repository as R
@@ -24,8 +25,10 @@ class Repository(R):
     def __init__(
         self,
         con: Connector,
+        bsize: int | None = None,
     ) -> None:
         self.con = con
+        self.bsize = bsize
 
     def load(self, monitor: HealthMonitor) -> "Repository":
         self.monitor = monitor
@@ -96,18 +99,51 @@ class Repository(R):
         gen = self.queryb(q, bsize, norm, limit)
         return (d, gen)
 
+    @overload
     def search(
         self, q: str, limit: int | None = None, offset: int | None = None
-    ) -> SearchResult:
-        if limit:
-            q += f" LIMIT {limit}"
+    ) -> SearchResult: ...
 
+    @overload
+    def search(
+        self, q: Select, limit: int | None = None, offset: int | None = None
+    ) -> SearchResult: ...
+
+    def search(
+        self,
+        q: str | Select,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> SearchResult:
         view = f"tmp_{uuid4().hex}"
 
-        con = self.connect()
-        con.execute(text(f"CREATE TEMP VIEW {view} AS {q}"))
+        if isinstance(q, Select):
+            if limit is not None:
+                q = q.limit(limit)
 
-        return SearchResult(con, view)
+            if offset is not None:
+                q = q.offset(offset)
+
+            con = self.connect()
+
+            sql = str(
+                q.compile(
+                    con,
+                    compile_kwargs={"literal_binds": True},
+                )
+            )
+        else:
+            if limit is not None:
+                q += f" LIMIT {limit}"
+
+            if offset is not None:
+                q += f" OFFSET {offset}"
+
+            sql = q
+            con = self.connect()
+
+        con.execute(text(f"CREATE TEMP VIEW {view} AS {sql}"))
+        return SearchResult(con, view, self.bsize)
 
     def synchronize(self) -> None:
         return self.monitor.sanity()
