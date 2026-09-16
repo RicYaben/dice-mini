@@ -1,15 +1,17 @@
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import ujson
 
+
 def count_groups(df: pd.DataFrame, *cols: str) -> pd.DataFrame:
     "returns a grouped dataframe with counts using a list of columns. The order of the columns determines how the groups are formed"
-    
+
     # Group by the specified columns and count the occurrences
-    grouped = df.groupby(list(cols)).size().to_frame('count')
-    grouped = grouped.sort_values("count", ascending=False)  # Sort by index to keep order
+    grouped = df.groupby(list(cols)).size().to_frame("count")
+    grouped = grouped.sort_values(
+        "count", ascending=False
+    )  # Sort by index to keep order
 
     return grouped
 
@@ -22,14 +24,14 @@ def count_multi_groups(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     - Groups and leaves are sorted by count descending.
     """
     # Step 1: leaf counts
-    leaf_counts = df.groupby(cols).size().reset_index(name='count')
+    leaf_counts = df.groupby(cols).size().reset_index(name="count")
 
     all_rows = []
 
     def add_subtotals(df_subset, level):
         col = cols[level]
         # compute total count per group
-        group_sums = df_subset.groupby(col)['count'].sum().sort_values(ascending=False)
+        group_sums = df_subset.groupby(col)["count"].sum().sort_values(ascending=False)
         for name in group_sums.index:
             group = df_subset[df_subset[col] == name]
             # subtotal if group has more than 1 member
@@ -38,7 +40,7 @@ def count_multi_groups(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
                 subtotal[col] = name
                 for i in range(level):
                     subtotal[cols[i]] = group.iloc[0][cols[i]]
-                subtotal['count'] = group['count'].sum()
+                subtotal["count"] = group["count"].sum()
                 all_rows.append(pd.DataFrame([subtotal]))
             # process next level or leaf
             if level + 1 < len(cols):
@@ -46,33 +48,34 @@ def count_multi_groups(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
                 add_subtotals(group, level + 1)
             else:
                 # leaf level: sort by count descending
-                leaf_sorted = group.sort_values('count', ascending=False)
+                leaf_sorted = group.sort_values("count", ascending=False)
                 all_rows.append(leaf_sorted)
 
     add_subtotals(leaf_counts, 0)
 
     combined = pd.concat(all_rows, ignore_index=True)
-    combined['count'] = combined['count'].astype(int)
+    combined["count"] = combined["count"].astype(int)
 
-    return combined.set_index(cols)[['count']]
+    return combined.set_index(cols)[["count"]]
+
 
 class Anonymizer:
-    def __init__(self, cols: list[str], out: Optional[str] = None) -> None:
+    def __init__(self, cols: list[str], out: str | None = None) -> None:
         self.cols = cols
         self.mappings = {}
         self._out = None
         self.out = out
 
-        if (o:=self.out) and o.exists():
+        if (o := self.out) and o.exists():
             self.mappings = ujson.loads(o.read_text())
             return
-        
-    @property    
+
+    @property
     def out(self):
         return self._out
-    
+
     @out.setter
-    def out(self, fpath: Optional[str]) -> None | Path:
+    def out(self, fpath: str | None) -> None | Path:
         if fpath:
             self._out = Path(fpath)
 
@@ -85,7 +88,7 @@ class Anonymizer:
             self._apply(df, col)
         self._save()
         return df
-    
+
     def _update_nested(self, row, base_col, nested_path, field_key, extract_fn):
         obj = row[base_col]
 
@@ -186,8 +189,10 @@ class Anonymizer:
 
         df[base_col] = df.apply(update, axis=1)
 
-def new_anonymizer(cols: list[str], out: Optional[str]) -> Anonymizer:
+
+def new_anonymizer(cols: list[str], out: str | None) -> Anonymizer:
     return Anonymizer(cols, out)
+
 
 class FieldRemover:
     def __init__(self, paths: list[str]) -> None:
@@ -232,6 +237,7 @@ class FieldRemover:
             current = current[key]
 
         current.pop(parts[-1], None)
+
 
 def new_remover(cols: list[str]) -> FieldRemover:
     return FieldRemover(cols)

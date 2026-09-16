@@ -6,15 +6,16 @@ from tabulate import tabulate
 
 from dice.shared.modules import MFACTORY, ModuleType
 
-from .config import Configuration
+from .config import ModuleFlags
 from .modules import (
-    Module,
+    ModuleImpl,
     ModuleRegistry,
 )
 from .repository import Repository
 from .signatures import Signature, new_signature
 
 logger = logging.getLogger(__name__)
+
 
 # TODO: we can make components and signatures a unique interface object with children
 @dataclass
@@ -25,7 +26,7 @@ class Component:
     signatures: list[Signature]
 
     @property
-    def modules(self) -> list[Module]:
+    def modules(self) -> list[ModuleImpl]:
         mods = []
         for s in self.signatures:
             mods.extend(s.modules)
@@ -54,15 +55,17 @@ class Component:
             "modules": [m.to_dict() for m in self.modules],
         }
 
+
 def new_component(t: ModuleType, name: str, *signatures: Signature) -> Component:
     return Component(t, name, list(signatures))
+
 
 class Components:
     def __init__(self, comps: list[Component]) -> None:
         self._comps = comps
 
     @property
-    def modules(self) -> list[Module]:
+    def modules(self) -> list[ModuleImpl]:
         mods = []
         for c in self._comps:
             mods.extend(c.modules)
@@ -76,9 +79,9 @@ class Components:
         self._comps.extend(comps._comps)
         return self
 
-    def configure(self, config: Configuration) -> "Components":
+    def flags(self, config: ModuleFlags) -> "Components":
         for mod in self.modules:
-            if f := config.data[mod.desc.name]:
+            if f := config[mod.desc.name]:
                 mod.desc.flags.update(**f)
         return self
 
@@ -110,13 +113,13 @@ class ComponentManager:
         self.name = name
         self._registries: list[ModuleRegistry] = []
 
-    def register(self, registry: "ModuleRegistry") -> 'ComponentManager':
+    def register(self, registry: "ModuleRegistry") -> "ComponentManager":
         self._registries.append(registry)
         return self
 
-    def find(self, modules: list[str] | None = None) -> list[tuple[str, Module]]:
+    def find(self, modules: list[str] | None = None) -> list[tuple[str, ModuleImpl]]:
         def matches_pattern(full_path_segments: list[str], pattern: str) -> bool:
-            pat_segments = pattern.split(":")
+            pat_segments = pattern.split(".")
             if len(pat_segments) == 1:
                 # single segment: match any segment or module
                 return any(
@@ -131,16 +134,17 @@ class ComponentManager:
                     return True
             return False
 
-        def collect(mods: list[str], registry: "ModuleRegistry", path: list[str]) -> list[tuple[str, Module]]:
+        def collect(
+            mods: list[str], registry: "ModuleRegistry", path: list[str]
+        ) -> list[tuple[str, ModuleImpl]]:
             result = []
             path.append(registry.name)
 
             for m in registry.modules:
                 fpath_mod = path + [m.desc.name]
-
                 for pattern in mods:
                     if matches_pattern(fpath_mod, pattern):
-                        p = ":".join(path)
+                        p = ".".join(path)
                         m.registry = p
                         result.append((p, m))
                         break
@@ -161,12 +165,13 @@ class ComponentManager:
 
     def get_modules(
         self, t: ModuleType | None = None, modules: list[str] | None = None
-    ) -> list[Module]:
+    ) -> list[ModuleImpl]:
         if not modules:
             modules = ["*"]
 
-        found = self.find(modules)
-        found = [m for _, m in found if m.t == t]
+        found = [m for _, m in self.find(modules)]
+        if t is not None:
+            found = filter(lambda m: m.t == t, found)
 
         # Deduplicate
         uniq = {id(m): m for m in found}
@@ -178,17 +183,21 @@ class ComponentManager:
         if not modules:
             modules = ["*"]
         comps = []
+
         for t in types or MFACTORY.all():
             if c := self.make(t, modules):
                 comps.append(c)
         return Components(comps)
 
-    def make(self, type: ModuleType, modules: list[str] | None = None) -> Component | None:
+    def make(
+        self, type: ModuleType, modules: list[str] | None = None
+    ) -> Component | None:
         if not modules:
             modules = ["*"]
 
         if not (mods := self.get_modules(type, modules)):
             return None
+
         signature = new_signature(type, self.name, *mods)
         return new_component(type, self.name, signature)
 

@@ -1,8 +1,16 @@
+import logging
 from typing import Any
 
 from sqlalchemy.dialects import sqlite
 
 from dice.shared.models import DatabaseModel
+
+logger = logging.getLogger(__name__)
+
+# logger.warning(
+#     "Package 'dice.shared._query' is deprecated and will be removed in a future release."
+#     "Use 'dice.shared.query' instead."
+# )
 
 
 def parse_clause(clause: str, value: Any) -> str:
@@ -80,7 +88,10 @@ def with_clauses(q: str, clauses: dict | None = None) -> str:
     return q.format(clauses=qc)
 
 
-def query(table: DatabaseModel | str, fields: list[str] | None = None, **clauses) -> str:
+def query(
+    table: DatabaseModel | str, fields: list[str] | None = None, **clauses
+) -> str:
+
     if isinstance(table, DatabaseModel):
         table = table.__tablename__
 

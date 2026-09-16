@@ -2,14 +2,20 @@ import logging
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Generic, Protocol, TypeVar, cast
+from typing import Protocol, TypeVar, cast
 
 from .flags import Flags
 from .models import Label, Tag
 from .repository import BaseRepo
 
 
-@dataclass(frozen=True)
+class ModuleNotInitializedError(Exception):
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"Module {name} is not initialized")
+
+
+@dataclass(frozen=True, slots=True)
 class ModuleType:
     command: str
     name: str
@@ -59,12 +65,37 @@ for m in ModuleEnum:
     MFACTORY.register(m.value)
 
 
-def find_module(mod: str) -> ModuleType:
+def module_type_aliases() -> list[str]:
+    return list(MFACTORY._lookup.keys())
+
+
+def find_module_type(mod: str) -> ModuleType:
     return MFACTORY.get(mod)
+
+
+def filter_module_types(cmd: list[str]) -> list[ModuleType]:
+    mods = []
+    for c in MFACTORY._lookup:
+        if c in cmd:
+            mods.append(MFACTORY.get(c))
+    return mods
+
+
+def max_module_types(cmd: list[str]) -> list[ModuleType]:
+    for c in MFACTORY._lookup:
+        if c in cmd:
+            l = MFACTORY.all()
+            m = MFACTORY.get(c)
+            return l[l.index(m) :]
+    return []
 
 
 R = TypeVar("R", bound=BaseRepo)
 F = TypeVar("F", bound=Flags)
+
+
+def do_nothing(*args, **kwargs) -> None:
+    return
 
 
 class Runner(
@@ -78,20 +109,11 @@ class Runner(
     ) -> None: ...
 
 
-def do_nothing(repo: BaseRepo, flags: Flags, logger: logging.Logger) -> None:
-    return
-
-
-class ModuleNotInitializedError(Exception):
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"Module {name} is not initialized")
-
-
 @dataclass
-class ModuleDescriptor(
-    Generic[R, F]
-):  # Needs to be like this, even if the lsp doesn't understand it
+class ModuleDescriptor[
+    R: BaseRepo,
+    F: Flags,
+]:
     t: str
     name: str
     description: str | None = None
@@ -124,13 +146,13 @@ class ModuleDescriptor(
 
     @property
     def repo(self) -> R:
-        if not self._repo:
+        if self._repo is None:
             raise ModuleNotInitializedError(self.name)
         return self._repo
 
     @property
     def rflags(self) -> F:
-        if not self._flags:
+        if self._flags is None:
             raise ModuleNotInitializedError(self.name)
         return self._flags
 
@@ -156,7 +178,7 @@ class ModuleDescriptor(
 
     def __str__(self) -> str:
         lines: list[str] = []
-        m = find_module(self.t)
+        m = find_module_type(self.t)
         lines.append(f"module: {self.name} ({m.name})")
 
         if self.description:

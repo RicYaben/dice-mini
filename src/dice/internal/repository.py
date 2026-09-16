@@ -11,7 +11,6 @@ from dice.shared.interfaces import Repository as R
 from dice.shared.interfaces import T
 from dice.shared.result import SearchResult
 
-from .config import DEFAULT_BSIZE
 from .database import Connector, insert_or_ignore
 from .health import HealthMonitor
 from .helpers import normalize_data
@@ -54,7 +53,7 @@ class Repository(R):
             s.flush()
 
     def query(
-        self, q: str, bsize: int = DEFAULT_BSIZE, limit: int | None = None
+        self, q: str, bsize: int | None = None, limit: int | None = None
     ) -> Generator[dict, None, None]:
         if limit:
             q = f"{q} LIMIT {limit}"
@@ -75,7 +74,7 @@ class Repository(R):
     def queryb(
         self,
         q: str,
-        bsize: int = DEFAULT_BSIZE,
+        bsize: int | None = None,
         norm=normalize_data,
         limit: int | None = None,
     ) -> Generator[pd.DataFrame, None, None]:
@@ -88,7 +87,7 @@ class Repository(R):
     def queryc(
         self,
         q: str,
-        bsize: int = DEFAULT_BSIZE,
+        bsize: int | None = None,
         norm=normalize_data,
         limit: int | None = None,
     ) -> tuple[int, Generator[pd.DataFrame, None, None]]:
@@ -110,7 +109,7 @@ class Repository(R):
 
 
 def query_batch(
-    q: str, con: Connection, bsize: int = DEFAULT_BSIZE, limit: int | None = None
+    q: str, con: Connection, bsize: int | None = None, limit: int | None = None
 ) -> Generator[Sequence, None, None]:
     if limit is not None:
         q = f"""

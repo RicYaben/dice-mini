@@ -11,18 +11,21 @@ license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    # TODO: we will try to remove these dependencies
     "pandas", # dice
     "numpy", # dice
-    "lark",
     "tabulate",
+    "pyarrow",
+
+    "lark",
     "tqdm",
     "ujson",
-    "pyarrow",
-    "typer",
     "sqlmodel",
+    "sqlalchemy",
     "dacite",
     "cryptography",
-    "tomlkit"
+    "tomlkit",
+    "cyclopts"
 ]
 
 [tool.pyright]
@@ -37,7 +40,7 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["dice", "dice.*", "modules", "modules.*", "commands", "commands.*"]
+include = ["dice", "dice.*", "modules", "modules.*", "cli", "cli.*", "config", "config.*"]
 exclude = ["analysis", "analysis.*"]
 
 [project.urls]
@@ -53,4 +56,4 @@ analysis = [
 ]
 
 [project.scripts]
-dice-mini = "commands.main:main"
+dice-mini = "cli.main:main"

@@ -1,11 +1,10 @@
-
 from sqlalchemy import UniqueConstraint
 
 from dice.shared.models import Model
 
 
 class CookbookModel(Model):
-    ...
+    pass
 
 
 class RecipeRef(CookbookModel, table=True):

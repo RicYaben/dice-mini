@@ -1,5 +1,6 @@
 import sys
 from contextlib import nullcontext
+from pathlib import Path
 
 from dice.internal.cookbook import Cookbook, new_cookbook
 from dice.internal.database import new_connector
@@ -11,7 +12,7 @@ from dice.shared.models import DatabaseModel
 
 
 def load_repository(
-    db: str | None = None,
+    db: str | Path | None = None,
 ) -> Repository:
     connector = new_connector(db, DatabaseModel)
     repo = new_repository(connector)
@@ -23,20 +24,21 @@ def load_repository(
     return repo.load(monitor)
 
 
-def load_cookbook(db: str | None = None) -> Cookbook:
+def load_cookbook(db: str | Path | None = None) -> Cookbook:
     con = new_connector(db, CookbookModel)
     repo = new_repository(con)
     cb = new_cookbook(repo)
     return cb
 
 
-def writer_ctx(output: str | None) -> object:
+def writer_ctx(output: str | Path | None) -> object:
     if not output:
         return nullcontext(sys.stdout)
     return open(output, "+a")
 
+
 class Writer:
-    def __init__(self, output: str | None):
+    def __init__(self, output: str | Path | None):
         self._ctx = writer_ctx(output)
 
     def __enter__(self):
@@ -45,5 +47,6 @@ class Writer:
     def __exit__(self, exc_type, exc_val, exc_tb):
         return self._ctx.__exit__(exc_type, exc_val, exc_tb)
 
-def writer(output: str | None) -> Writer:
+
+def writer(output: str | Path | None) -> Writer:
     return Writer(output)

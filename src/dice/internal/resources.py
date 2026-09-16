@@ -1,16 +1,17 @@
 import logging
-import os
 from collections.abc import Generator
+from dataclasses import dataclass, field
 from itertools import chain
+from pathlib import Path
 
 import pandas as pd
-from sqlalchemy import Connection, select
-from sqlmodel import Session
+import ujson
+from sqlalchemy import Connection
+from sqlmodel import Session, col, select
 from tqdm import tqdm
 
 from dice.shared.models import Cursor, Record, Resource, Source
 
-from .config import DEFAULT_BSIZE
 from .database import get_or_create
 from .loaders import get_loader_normalizer, read_resource
 from .repository import Repository
@@ -18,39 +19,46 @@ from .repository import Repository
 logger = logging.getLogger(__name__)
 
 
-def load_resource(s: Session, res_id: int) -> tuple[Resource, Cursor, Source]:
+class ResourceNotFoundError(Exception):
+    def __init__(self, res_id: int) -> None:
+        self.res_id = res_id
+        super().__init__(f"resource not found: {res_id}")
+
+
+def load_resource(
+    s: Session,
+    res_id: int,
+) -> tuple[Resource, Cursor, Source]:
     stmt = (
         select(Resource, Cursor, Source)
-        .select_from(Resource)
-        .join(Cursor, Cursor.resource_id == Resource.id)
-        .join(Source, Source.id == Resource.source_id)
-        .where(Resource.id == res_id)
+        .join(Cursor, col(Cursor.resource_id) == col(Resource.id))
+        .join(Source, col(Source.id) == col(Resource.source_id))
+        .where(col(Resource.id) == res_id)
     )
 
-    row = s.exec(stmt).first()
-    if not row:
-        raise ValueError(f"resource not found: {res_id}")
-    return row.tuple()
+    if row := s.exec(stmt).first():
+        return row
+    raise ValueError(f"resource not found: {res_id}")
 
 
+@dataclass
 class Sourcerer:
     """Something to load sources"""
+
+    res_id: int
+    resume: bool
+    bsize: int
 
     _gen: Generator[pd.DataFrame, None, None] | None = None
     _peek: pd.DataFrame | None = None
     _peeked: bool = False
 
-    _ic: list[str] = []
-
-    def __init__(self, res_id: int, resume: bool, bsize: int) -> None:
-        self.res_id = res_id
-        self.resume = resume
-        self.bsize = bsize
+    _ic: list[str] = field(default_factory=list)
 
     @property
     def peek(self) -> pd.DataFrame | None:
         if not self._gen:
-            raise Exception("resource not loaded")
+            raise ResourceNotFoundError(self.res_id)
 
         if self._peeked:
             return self._peek
@@ -79,7 +87,7 @@ class Sourcerer:
 
         n = min(1000, len(p))
         logger.debug(f"polling source with {n}/{len(p)}")
-        s = p.sample(n)
+        p.sample(n)
 
         # numeric cols
         ic = list(p.select_dtypes(include=["number"]).columns)
@@ -87,10 +95,7 @@ class Sourcerer:
         self._ic = ic
         return ic
 
-    def exists(self, fpath: str) -> bool:
-        return os.path.exists(fpath)
-
-    def load(self, fpath: str, i: int = 0) -> None:
+    def load(self, fpath: Path, i: int = 0) -> None:
         if self._gen:
             return
 
@@ -126,7 +131,8 @@ class Sourcerer:
                 # delete all the records stored from this resource to avoid dupes
                 res.flush_records(con)
 
-            self.load(res.fpath, cursor.idx)
+            fpath = Path(res.fpath)
+            self.load(fpath, cursor.idx)
             p = self.peek
             assert isinstance(p, pd.DataFrame)
             assert self._gen
@@ -147,8 +153,8 @@ class Sourcerer:
         p = self.peek
         return p is None or p.empty
 
-    def check(self, fpath: str):
-        if not self.exists(fpath):
+    def check(self, fpath: Path):
+        if not fpath.exists():
             raise ValueError(f"source not found: {fpath}")
         if self.empty():
             raise ValueError(f"empty resource: {fpath}")
@@ -161,9 +167,9 @@ def new_resourcerer(res_id: int, resume: bool, bsize: int) -> Sourcerer:
 def add_resource(
     repo: Repository,
     source: Source,
-    fpath: str,
+    fpath: Path,
+    bsize: int,
     resume: bool = True,
-    bsize: int = DEFAULT_BSIZE,
 ):
     logger.info(f"adding resource from {fpath} ({bsize}/b)")
 
@@ -180,15 +186,19 @@ def add_resource(
     with repo.connect() as con:
         gen = sourcerer.cast(con)
         for c in tqdm(gen):
-            rdf = [
-                Record(
-                    source=source.name,
-                    resource_id=res.id,
-                    host=r["host"],
-                    data=r["data"],
-                    port=r["port"],
-                    protocol=r["protocol"],
+            records = []
+            for _, row in c.iterrows():
+                data = row.get("data", {})
+                assert isinstance(data, dict)
+
+                records.append(
+                    Record(
+                        source=source.name,
+                        resource_id=res.id,
+                        host=row.get("host", None),
+                        data=data,
+                        port=row.get("port", None),
+                        protocol=row.get("protocol", None),
+                    )
                 )
-                for _, r in c.iterrows()
-            ]
-            repo.insert(rdf, con=con)
+            repo.insert(records, con=con)

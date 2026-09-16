@@ -4,7 +4,7 @@ from typing import Any
 import pandas as pd
 import ujson
 
-from .config import DATA_PREFIX
+DATA_PREFIX = "data_"
 
 
 def normalize_data(df: pd.DataFrame, prefix: str = "") -> pd.DataFrame:

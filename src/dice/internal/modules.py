@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from importlib import import_module
 from importlib.metadata import entry_points
 
-from dice.shared.modules import ModuleDescriptor, ModuleEnum, ModuleType, find_module
+from dice.shared.modules import (
+    ModuleDescriptor,
+    ModuleEnum,
+    ModuleType,
+    find_module_type,
+)
 from dice.shared.repository import BaseRepo, CRepo, FRepo, TRepo
 
 from .repository import Repository
@@ -29,7 +34,7 @@ def make_repository(base: Repository, name: str, t: ModuleType) -> BaseRepo:
 
 
 @dataclass
-class Module:
+class ModuleImpl:
     t: ModuleType
     desc: ModuleDescriptor
     registry: str | None = None
@@ -63,16 +68,16 @@ class Module:
 class ModuleRegistry:
     def __init__(self, name: str = "custom") -> None:
         self.name = name
-        self.modules: list[Module] = []
+        self.modules: list[ModuleImpl] = []
         self.children: dict[str, ModuleRegistry] = {}
 
     def register(self, desc: ModuleDescriptor) -> "ModuleRegistry":
-        t = find_module(desc.t)
-        mod = Module(t, desc)
+        t = find_module_type(desc.t)
+        mod = ModuleImpl(t, desc)
         self.add(mod)
         return self
 
-    def add(self, *modules: Module) -> "ModuleRegistry":
+    def add(self, *modules: ModuleImpl) -> "ModuleRegistry":
         self.modules.extend(modules)
         return self
 
@@ -89,17 +94,17 @@ class ModuleRegistry:
             self.add_group(g)
         return self
 
-    def all(self) -> list[Module]:
+    def all(self) -> list[ModuleImpl]:
         mods = []
         for g in self.children.values():
             mods.extend(g.all())
         mods.extend(self.modules)
         return mods
 
-    def find(self, path: str) -> list[Module]:
+    def find(self, path: str) -> list[ModuleImpl]:
         parts = path.split(":", 1)
 
-        # If only registry is queried ("honeypots")
+        # If only registry is queried (e.g., "honeypots")
         if len(parts) == 1:
             if fnmatch.fnmatch(self.name, parts[0]):
                 return self.all()
@@ -109,7 +114,7 @@ class ModuleRegistry:
                 mods.extend(ch.find(path))
             return mods
 
-        # If registry + module ("honeypots:cowrie")
+        # If registry + module (e.g., "honeypots:cowrie")
         reg, mod = parts
         if fnmatch.fnmatch(self.name, reg):
             return [m for m in self.modules if fnmatch.fnmatch(m.desc.name, mod)]

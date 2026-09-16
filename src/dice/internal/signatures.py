@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from dice.shared.modules import ModuleType
 
-from .modules import Module
+from .modules import ModuleImpl
 from .repository import Repository
 
 logger = logging.getLogger(__name__)
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class Signature:
     t: ModuleType
     name: str
-    modules: list[Module]
+    modules: list[ModuleImpl]
 
     def initialize(self, repo: Repository) -> "Signature":
         for m in self.modules:
@@ -24,10 +24,10 @@ class Signature:
         for m in self.modules:
             m.run()
 
-    def add(self, *module: Module) -> "Signature":
+    def add(self, *module: ModuleImpl) -> "Signature":
         self.modules.extend(module)
         return self
 
 
-def new_signature(t: ModuleType, name: str, *modules: Module) -> Signature:
+def new_signature(t: ModuleType, name: str, *modules: ModuleImpl) -> Signature:
     return Signature(t, name, list(modules))

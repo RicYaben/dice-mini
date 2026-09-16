@@ -1,4 +1,4 @@
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import TypeVar
 
 from sqlalchemy import Connection
@@ -12,16 +12,20 @@ from .tools import new_fingerprint, new_host_tag
 T = TypeVar("T", bound=DatabaseModel)
 
 
-class Cache:
-    def __init__(self) -> None:
-        self.cache: dict[type[DatabaseModel], list[DatabaseModel]] = {}
+class Cache[T: DatabaseModel]:
+    def __init__(self, csize: int, flush_fn: Callable[[list[T]], None]) -> None:
+        self.csize = csize
+        self.flush_cb = flush_fn
+        self.cache: list[T] = []
 
-    # NOTE: May be able to remove the generic here
-    def add(self, item: T) -> None:
-        self.cache.setdefault(type(item), []).append(item)
+    def add(self, *items: T) -> None:
+        for item in items:
+            self.cache.append(item)
+            if len(self.cache) >= self.csize:
+                self.flush()
 
     def find(self, query: T) -> T | None:
-        for item in self.cache.get(type(query), []):
+        for item in self.cache:
             if self._matches(item, query):
                 return item
 
@@ -29,9 +33,7 @@ class Cache:
 
     @staticmethod
     def _matches(item: T, query: T) -> bool:
-        for field in query.model_fields:
-            value = getattr(query, field)
-
+        for field, value in type(query).model_fields.items():
             if value is not None and getattr(item, field) != value:
                 return False
 
@@ -40,8 +42,9 @@ class Cache:
     def clear(self) -> None:
         self.cache.clear()
 
-    def len(self) -> int:
-        return sum(len(items) for items in self.cache.values())
+    def flush(self) -> None:
+        self.flush_cb(self.cache)
+        self.cache.clear()
 
 
 def label(con: Connection, fp: int, lab: str, cache: Cache) -> FingerprintLabel:
@@ -81,23 +84,17 @@ def fingerprint(
     return new_fingerprint(mod, host, record, data, protocol)
 
 
-class BaseRepo:
+class BaseRepo[T: DatabaseModel]:
     def __init__(self, repo: Repository, name: str) -> None:
-        self.cache: Cache = Cache()
-        self.csize = 1_000
+        self.cache: Cache[T] = Cache(1_000, self.repo.insert)
         self.repo = repo
         self.name = name
 
-    def store(self, *item: DatabaseModel) -> None:
-        for i in item:
-            self.cache.add(i)
-        if self.cache.len() >= self.csize:
-            self.flush()
+    def store(self, *item: T) -> None:
+        self.cache.add(*item)
 
     def flush(self) -> None:
-        for vals in self.cache.cache.values():
-            self.repo.insert(vals)
-        self.cache.clear()
+        self.cache.flush()
 
     def query(self, q: str) -> Generator[dict]:
         return self.repo.query(q)
@@ -106,20 +103,20 @@ class BaseRepo:
         return self.repo.search(q)
 
 
-class FRepo(BaseRepo):
+class FRepo(BaseRepo[Fingerprint]):
     def fingerprint(self, host: str, record: int, data: dict, protocol: str = "-"):
         fp = fingerprint(self.name, host, record, data, protocol)
         self.store(fp)
 
 
-class CRepo(BaseRepo):
+class CRepo(BaseRepo[FingerprintLabel]):
     def label(self, fp: int, lab: str) -> None:
         with self.repo.connect() as con:
             lb = label(con, fp, lab, cache=self.cache)
             self.store(lb)
 
 
-class TRepo(BaseRepo):
+class TRepo(BaseRepo[HostTag]):
     def tag(self, host: str, name: str, comment: str | None = None):
         with self.repo.connect() as con:
             t = tag(con, host, name, cache=self.cache, comment=comment)

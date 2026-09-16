@@ -5,7 +5,7 @@ from dice.shared.modules import MFACTORY, ModuleType
 from modules import registry
 
 from .components import ComponentManager, Components
-from .config import Configuration
+from .config import ModuleFlags
 from .engine import Engine, new_engine
 from .modules import load_registry_plugins
 
@@ -18,7 +18,7 @@ class Recipe:
     version: str
     name: str
 
-    configuration: Configuration
+    flags: ModuleFlags
     components: Components
     # signatures: Signatures
     requirements: list[str] = field(default_factory=list)
@@ -27,10 +27,11 @@ class Recipe:
         return {
             "version": self.version,
             "name": self.name,
-            "configuration": self.configuration.to_dict(),
+            "flags": self.flags.root,
             "components": self.components.to_dict(),
             "requirements": self.requirements,
         }
+
 
 @dataclass
 class Workflow:
@@ -39,39 +40,34 @@ class Workflow:
 
     def start(self, repo: Repository) -> None:
         # mon = monitor(self.desc.name)
-        self.engine.run(repo, self.desc.configuration) # mon)
+        self.engine.run(repo, self.desc.flags)  # mon)
 
     def dump(self) -> str:
         return str(self.desc.to_dict())
 
-class WorkflowBuilder:
 
+class WorkflowBuilder:
     def __init__(self) -> None:
         self._desc = Recipe(
             version=version("dice-mini"),
             name="custom",
-            configuration=Configuration(None),
+            flags=ModuleFlags({}),
             components=Components([]),
         )
         self._cmanager = ComponentManager().register(registry)
 
-    def configure(self, fpath: str | None) -> 'WorkflowBuilder':
-        if fpath is None:
-            return self
-
-        self._desc.configuration = self._desc.configuration.load(fpath)
+    def flags(self, **kwargs) -> "WorkflowBuilder":
+        self._desc.flags.update_all(**kwargs)
         return self
 
-    def params(self, **kwargs) -> 'WorkflowBuilder':
-        self._desc.configuration.update_all(**kwargs)
-        return self
-
-    def components(self, t: list[ModuleType], mods: list[str]) -> 'WorkflowBuilder':
+    def components(
+        self, t: list[ModuleType] | None = None, mods: list[str] | None = None
+    ) -> "WorkflowBuilder":
         c = self._cmanager.build(t, mods)
         self._desc.components.extend(c)
         return self
 
-    def plugins(self, groups: str | list[str] | None) -> 'WorkflowBuilder':
+    def registries(self, groups: str | list[str] | None) -> "WorkflowBuilder":
         if groups is None:
             return self
 
@@ -91,7 +87,7 @@ class WorkflowBuilder:
             engine=new_engine(self._desc.components),
         )
 
-    def descriptor(self, desc: Recipe) -> 'WorkflowBuilder':
+    def descriptor(self, desc: Recipe) -> "WorkflowBuilder":
         self._desc = desc
         return self
 
@@ -99,11 +95,11 @@ class WorkflowBuilder:
         # This should return a RecipeBuilder, but there are a few things that would change
 
         # conf
-        conf = Configuration(None)
+        conf = ModuleFlags({})
         conf.update_all(**data["configuration"])
 
         # plugins
-        self.plugins(data["requirements"])
+        self.registries(data["requirements"])
 
         # comps
         comps = Components([])
@@ -116,16 +112,19 @@ class WorkflowBuilder:
         return Recipe(
             version=data["version"],
             name=data["name"],
-            configuration=conf,
+            flags=conf,
             components=comps,
             requirements=data["requirements"],
         )
 
+
 def new_builder() -> WorkflowBuilder:
     return WorkflowBuilder()
 
+
 def prepare(desc: Recipe) -> WorkflowBuilder:
     return new_builder().descriptor(desc)
+
 
 def unmarshal(data: dict) -> Recipe:
     return new_builder().unmarshal(data)

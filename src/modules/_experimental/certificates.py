@@ -4,10 +4,10 @@ from cryptography.hazmat.primitives import serialization
 
 import pandas as pd
 
-from dice.internal.modules import Module
+from dice.internal.modules import ModuleImpl
 from dice.sdk.query import query
 
-def certs_cls_init(mod: Module) -> None:
+def certs_cls_init(mod: ModuleImpl) -> None:
     mod.register_label(
         "reused-certificate",
         "certificate reused accross multiple addresses",
@@ -54,7 +54,7 @@ def parse_certificate(certificate: str) -> dict | None:
         return
 
     not_before = cert.not_valid_before_utc.replace(tzinfo=timezone.utc)
-    not_after = cert.not_valid_after_utc.replace(tzinfo=timezone.utc) 
+    not_after = cert.not_valid_after_utc.replace(tzinfo=timezone.utc)
 
     raw_key = pkey.public_bytes(
         encoding=serialization.Encoding.DER,
@@ -73,7 +73,7 @@ def parse_certificate(certificate: str) -> dict | None:
     )
 
 
-def eval_times(mod: Module, fids: list[int], cert: dict) -> None:
+def eval_times(mod: ModuleImpl, fids: list[int], cert: dict) -> None:
     not_before: datetime = cert.get("not_before") # type: ignore
     not_after: datetime = cert.get("not_after") # type: ignore
     timestamp = datetime.now()
@@ -82,12 +82,12 @@ def eval_times(mod: Module, fids: list[int], cert: dict) -> None:
         for fid in fids:
             mod.store(mod.make_label(fid, "malformed", "future"))
         return
-    
+
     if (not_after - not_before) <= pd.Timedelta(days=0):
         for fid in fids:
             mod.store(mod.make_label(fid, "malformed", "negative time"))
         return
-    
+
     if not_after < timestamp:
         for fid in fids:
             mod.store(mod.make_label(fid, "expired-certificate"))
@@ -96,11 +96,11 @@ def eval_times(mod: Module, fids: list[int], cert: dict) -> None:
         for fid in fids:
             mod.store(mod.make_label(fid, "long-lasting-certificate"))
 
-def eval_crypto(mod: Module, fids: list[int], cert: dict) -> None:
+def eval_crypto(mod: ModuleImpl, fids: list[int], cert: dict) -> None:
     sig: str = cert.get("signature_algorithm", "")
-    if not sig: 
+    if not sig:
         return
-    
+
     separator = "With" if "With" in sig else "-with-"
     hash_func = sig.split(separator)[0]
 
@@ -110,7 +110,7 @@ def eval_crypto(mod: Module, fids: list[int], cert: dict) -> None:
         for fid in fids:
             mod.store(mod.make_label(fid, "weak-crypto"))
 
-def eval_key(mod: Module, fids: list[int], cert: dict) -> None:
+def eval_key(mod: ModuleImpl, fids: list[int], cert: dict) -> None:
         key = cert.get("pkey")
         if pd.isna(key):
             return
@@ -119,7 +119,7 @@ def eval_key(mod: Module, fids: list[int], cert: dict) -> None:
             for fid in fids:
                 mod.store(mod.make_label(fid, "short-key"))
 
-def cert_eval_handler(mod: Module) -> None:
+def cert_eval_handler(mod: ModuleImpl) -> None:
     con = mod.repo().connect()
     # TODO: fix this
     q = "..."
@@ -130,7 +130,7 @@ def cert_eval_handler(mod: Module) -> None:
             eval_key(mod, fids, cert)
             eval_times(mod, fids, cert)
 
-def cert_reuses(mod: Module) -> None:
+def cert_reuses(mod: ModuleImpl) -> None:
     # get fingerprints with raw certificates found > 1 times
     q_fps_reused_certs = "..."
     for ch in mod.query(q_fps_reused_certs):
@@ -142,17 +142,16 @@ def cert_reuses(mod: Module) -> None:
         for fid in ch["id"].tolist():
             mod.store(mod.make_label(fid, "reused-keys"))
 
-def scan_certificates(mod: Module) -> None:
+def scan_certificates(mod: ModuleImpl) -> None:
     def handler(df: pd.DataFrame):
         for _, fp in df.iterrows():
             certs = fp.get("data_certificates")
             if not certs:
                 return
-            
+
             cert = parse_certificate(certs[0])
             if not cert:
                 return
-            
+
             mod.store(cert)
     mod.with_pbar(handler, query("fingerprint", prefix=""), desc="certificates")
-        
