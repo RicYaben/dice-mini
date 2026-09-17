@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
 
-import pandas as pd
+import pandas as pd  # TODO: remove dependancy on pandas
 from sqlalchemy import Connection
 from sqlmodel import Session, col, select
 from tqdm import tqdm
