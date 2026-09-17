@@ -1,16 +1,17 @@
 from dataclasses import dataclass, field
 from importlib.metadata import version
 
+from dice.internal.config import ModuleFlags
+from dice.internal.engine import (
+    ComponentManager,
+    Components,
+    Engine,
+    new_engine,
+    plugins,
+)
 from dice.shared.modules import MFACTORY, ModuleType
-
-# from .monitor import monitor
 from dice.shared.repository import Repository
 from modules import registry
-
-from .components import ComponentManager, Components
-from .config import ModuleFlags
-from .engine import Engine, new_engine
-from .modules import load_registry_plugins
 
 
 @dataclass
@@ -20,7 +21,6 @@ class Recipe:
 
     flags: ModuleFlags
     components: Components
-    # signatures: Signatures
     requirements: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -75,7 +75,7 @@ class WorkflowBuilder:
             groups = [groups]
 
         for g in groups:
-            if regs := load_registry_plugins(g):
+            if regs := plugins(g):
                 self._desc.requirements.append(g)
                 for r in regs:
                     self._cmanager.register(r)

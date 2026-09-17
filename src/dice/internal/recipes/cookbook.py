@@ -6,17 +6,18 @@ import ujson
 from sqlmodel import or_, select
 
 from dice.shared.query import query, to_sql
+from dice.shared.repository import Repository
 from dice.shared.result import SearchResult
 
 from .models import RecipeRef
 from .recipe import Recipe, unmarshal
-from .repository import Repository
 
 IDENTIFIER_RE = re.compile(r"^10\.\d{4,9}/\S+$")
 
 
 def is_local(value: str) -> bool:
     return Path(value).exists()
+
 
 def is_remote(value: str) -> bool:
     try:
@@ -26,17 +27,18 @@ def is_remote(value: str) -> bool:
 
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
+
 def is_identifier(value: str) -> bool:
     return bool(IDENTIFIER_RE.fullmatch(value))
 
-class Cookbook:
 
+class Cookbook:
     def __init__(self, repo: Repository) -> None:
         self.repo = repo
         self.desc_fname: str = "recipe.json"
 
     def ref(self, identifier: str) -> tuple[RecipeRef | None, Exception | None]:
-        q = query(RecipeRef, clauses={"name":identifier})
+        q = query(RecipeRef, clauses={"name": identifier})
         entry = self.repo.search(q).one()
         if not entry:
             return None, None
@@ -56,10 +58,7 @@ class Cookbook:
     def search(self, recipes: list[str] | None = None) -> SearchResult:
         patterns = recipes or ["*"]
 
-        conditions = [
-            RecipeRef.name.op("GLOB")(pattern)
-            for pattern in patterns
-        ]
+        conditions = [RecipeRef.name.op("GLOB")(pattern) for pattern in patterns]
         statement = select(RecipeRef).where(or_(*conditions))
         return self.repo.search(to_sql(statement))
 
@@ -108,13 +107,13 @@ class Cookbook:
 
         raise ValueError(f"unable to resolve recipe location: {fpath}")
 
-
     def materialize(
         self,
         ref: RecipeRef,
         destination: str | Path,
     ) -> RecipeRef:
         raise NotImplementedError
+
 
 def new_cookbook(repo: Repository) -> Cookbook:
     return Cookbook(repo)

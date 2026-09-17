@@ -4,7 +4,7 @@ from typing import Protocol, TypeVar
 from sqlalchemy import Connection, Select
 from sqlmodel import Session, SQLModel
 
-from dice.shared.result import SearchResult
+from .result import SearchResult
 
 T = TypeVar("T", bound=SQLModel)
 

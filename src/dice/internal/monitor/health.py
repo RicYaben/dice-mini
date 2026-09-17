@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Callable
 
-from .events import Event, EventType, new_event
+from dice.internal.events import Event, EventType, new_event
 
 logger = logging.getLogger(__name__)
 

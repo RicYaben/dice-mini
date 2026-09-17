@@ -4,10 +4,10 @@ from dataclasses import dataclass
 
 from tabulate import tabulate
 
+from dice.internal.config import ModuleFlags
 from dice.shared.modules import MFACTORY, ModuleType
 from dice.shared.repository import Repository
 
-from .config import ModuleFlags
 from .modules import (
     ModuleImpl,
     ModuleRegistry,

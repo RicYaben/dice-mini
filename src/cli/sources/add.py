@@ -3,8 +3,9 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
-from dice.cli.config.args import BatchSizeArg, ResultsArg
-from dice.results import results, source
+from dice.cli.args import BatchSizeArg, ResultsArg
+from dice.results import results
+from dice.sources import source
 
 
 def add(

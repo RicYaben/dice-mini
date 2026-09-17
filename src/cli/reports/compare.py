@@ -4,8 +4,8 @@ from typing import Annotated
 import ujson
 from cyclopts import Parameter
 
-from dice.cli.config.args import BatchSizeArg
-from dice.cli.config.models import SearchOptions
+from dice.cli.args import BatchSizeArg
+from dice.cli.models import SearchOptions
 from dice.reports import compare
 from dice.results import results
 

@@ -1,7 +1,6 @@
 import ipaddress
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Optional
 
 from lark import Lark, Token, Transformer, Tree, v_args
 
@@ -12,14 +11,14 @@ class IPRange:
     end: int
 
 
+class Expr:
+    pass
+
+
 @dataclass
 class Query:
     ip_range: IPRange
-    filter: Optional["Expr"]  # top-level expression
-
-
-class Expr:
-    pass
+    filter: Expr | None  # top-level expression
 
 
 @dataclass
@@ -286,6 +285,7 @@ def parse_query(query: str):
     ast = QueryTransformer().transform(tree)
     q = SQLBuilder().build(ast)
     return q
+
 
 # TODO: remove the IP field, we dont need it
 # host replaces IP, you can add multiple "host" fields or one of the modifiers

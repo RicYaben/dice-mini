@@ -1,6 +1,6 @@
 import ipaddress
 
-from dice.shared.models import (
+from .models import (
     Fingerprint,
     Host,
     HostTag,

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Generator, Sequence
 from contextlib import ExitStack
-from typing import Any
 
 from dice.internal.ast import make_parser
-from dice.shared.report import (
+from dice.internal.reports import (
     Comparison,
     Report,
     ReportBuilder,

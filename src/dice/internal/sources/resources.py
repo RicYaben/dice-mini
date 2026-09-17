@@ -9,10 +9,10 @@ from sqlalchemy import Connection
 from sqlmodel import Session, col, select
 from tqdm import tqdm
 
+from dice.internal.database import get_or_create
 from dice.shared.models import Cursor, Record, Resource, Source
 from dice.shared.repository import Repository
 
-from .database import get_or_create
 from .loaders import get_loader_normalizer, read_resource
 
 logger = logging.getLogger(__name__)

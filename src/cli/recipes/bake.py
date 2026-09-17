@@ -5,8 +5,8 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
-from dice.cli.config.args import ModulesArg
-from dice.cli.config.models import CommandOptions
+from dice.cli.args import ModulesArg
+from dice.cli.models import CommandOptions
 from dice.recipes import workflow
 from dice.results import results
 

@@ -6,7 +6,7 @@ from sqlalchemy import Connection, CursorResult, RowMapping
 from sqlmodel import text
 from tqdm import tqdm
 
-from dice.shared._query import query
+from ._query import query
 
 
 # TODO: I would love to have a pagination option here

@@ -1,4 +1,4 @@
-from dice.cli.config.args import ResultsArg
+from dice.cli.args import ResultsArg
 from dice.results import results
 
 

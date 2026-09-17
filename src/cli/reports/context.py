@@ -4,8 +4,8 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
-from dice.cli.config.helpers import token_converter
-from dice.cli.config.models import SearchOptions
+from dice.cli.helpers import token_converter
+from dice.cli.models import SearchOptions
 
 
 @dataclass

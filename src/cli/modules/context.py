@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from dice.cli.config.args import ModulesArg, RegistriesArg
+from dice.cli.args import ModulesArg, RegistriesArg
 
 
 @dataclass

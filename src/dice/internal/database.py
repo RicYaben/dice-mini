@@ -53,7 +53,7 @@ def insert_or_ignore(
     return result
 
 
-def get(session: Session, model: type[DatabaseModel], **kwargs):
+def get(session: Session, model: type[DatabaseModel], **kwargs) -> DatabaseModel | None:
     return session.exec(select(model).filter_by(**kwargs)).first()
 
 

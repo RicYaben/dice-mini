@@ -1,7 +1,8 @@
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import CTE, JSON, Select, func, select, type_coerce
+from sqlalchemy import CTE, JSON, Select, func, type_coerce
+from sqlmodel import select
 
 from dice.shared.models import (
     Fingerprint,
@@ -13,7 +14,7 @@ from dice.shared.models import (
     Tag,
 )
 
-from .models import Report, ReportFields
+from .models import ReportFields
 
 
 class ReportBuilder:

@@ -1,10 +1,9 @@
 import logging
 
-# from .monitor import Monitor
+from dice.internal.config import ModuleFlags
 from dice.shared.repository import Repository
 
 from .components import Components
-from .config import ModuleFlags
 
 logger = logging.getLogger(__name__)
 
