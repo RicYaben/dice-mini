@@ -2,7 +2,7 @@
 Public interfaces
 """
 
-from dice.internal.modules import new_registry
+from dice.modules import new_registry
 from dice.shared import query
 from dice.shared.flags import Flag, Flags, flag
 
