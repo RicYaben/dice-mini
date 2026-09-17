@@ -98,21 +98,19 @@ class ReportBuilder:
 
     def build(self) -> Select:
         """Build a statement for the configured hosts."""
-
-        if self._hosts is None:
-            raise ValueError("No hosts configured. Call hosts() before build().")
-
         return self._build(self._hosts)
 
     def _build(
         self,
-        hosts: Sequence[str],
+        hosts: Sequence[str] | None,
     ) -> Select:
         statement = select(
             Host.ip,
             Host.prefix,
             Host.asn,
-        ).where(Host.ip.in_(hosts))
+        )
+        if hosts:
+            statement = statement.where(Host.ip.in_(hosts))
 
         needs_fingerprints = (
             self._fields.ports or self._fields.services or self._fields.labels
@@ -170,23 +168,22 @@ class ReportBuilder:
 
     def _fingerprints(
         self,
-        hosts: Sequence[str],
+        hosts: Sequence[str] | None,
     ) -> CTE:
-        return (
-            select(
-                Fingerprint.host.label("ip"),
-                Fingerprint.id.label("fingerprint_id"),
-                Fingerprint.protocol,
-                Record.port,
-                Fingerprint.data,
-            )
-            .join(
-                Record,
-                Record.id == Fingerprint.record_id,
-            )
-            .where(Fingerprint.host.in_(hosts))
-            .cte("fingerprints")
+        stmt = select(
+            Fingerprint.host.label("ip"),
+            Fingerprint.id.label("fingerprint_id"),
+            Fingerprint.protocol,
+            Record.port,
+            Fingerprint.data,
+        ).join(
+            Record,
+            Record.id == Fingerprint.record_id,
         )
+
+        if hosts:
+            stmt = stmt.where(Fingerprint.host.in_(hosts))
+        return stmt.cte("fingerprints")
 
     @staticmethod
     def _fingerprint_labels(
@@ -287,9 +284,9 @@ class ReportBuilder:
 
     @staticmethod
     def _tags(
-        hosts: Sequence[str],
+        hosts: Sequence[str] | None,
     ) -> CTE:
-        return (
+        stmt = (
             select(
                 HostTag.host.label("ip"),
                 func.json_group_array(func.distinct(Tag.name)).label("tags"),
@@ -299,10 +296,11 @@ class ReportBuilder:
                 Tag,
                 Tag.id == HostTag.tag_id,
             )
-            .where(HostTag.host.in_(hosts))
-            .group_by(HostTag.host)
-            .cte("host_tags")
         )
+        if hosts:
+            stmt = stmt.where(HostTag.host.in_(hosts))
+
+        return stmt.group_by(HostTag.host).cte("host_tags")
 
     @staticmethod
     def _json_array(
