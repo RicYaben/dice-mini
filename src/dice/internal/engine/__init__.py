@@ -1,5 +1,5 @@
 from .components import ComponentManager, Components
-from .engine import Engine, new_engine
-from .modules import load_registry_plugins as plugins
+from .engine import Engine, engine
+from .modules import registries
 
-__all__ = ["Components", "ComponentManager", "Engine", "new_engine", "plugins"]
+__all__ = ["ComponentManager", "Components", "Engine", "engine", "registries"]

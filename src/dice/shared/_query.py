@@ -1,13 +1,12 @@
-import logging
 from typing import Any
 
 from sqlalchemy.dialects import sqlite
 
 from dice.shared.models import DatabaseModel
 
-logger = logging.getLogger(__name__)
-
 # TODO: this package has to go!
+# import logging
+# logger = logging.getLogger(__name__)
 # logger.warning(
 #     "Package 'dice.shared._query' is deprecated and will be removed in a future release."
 #     "Use 'dice.shared.query' instead."

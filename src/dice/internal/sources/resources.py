@@ -111,10 +111,14 @@ class Sourcerer:
     def format_columns(
         self, df: pd.DataFrame, res_id: int, ic: list[str]
     ) -> pd.DataFrame:
-        # convert to int64 numeric cols
+        df = df.copy()
+
         for c in ic:
             df[c] = pd.to_numeric(
-                df[c], errors="coerce", dtype_backend="pyarrow", downcast="float"
+                df[c],
+                errors="coerce",
+                dtype_backend="pyarrow",
+                downcast="integer",
             )
 
         df["resource_id"] = res_id
@@ -174,7 +178,7 @@ def add_resource(
 
     # load the resource or create it with its cursor
     with repo.session() as s:
-        res, _ = get_or_create(s, Resource, fpath=fpath, source_id=source.id)
+        res, _ = get_or_create(s, Resource, fpath=str(fpath), source_id=source.id)
         cursor, _ = get_or_create(s, Cursor, resource_id=res.id)
         res.cursor = cursor
         s.commit()

@@ -14,8 +14,6 @@ from dice.shared.modules import (
 )
 from dice.shared.repository import BaseRepo, CRepo, FRepo, Repository, TRepo
 
-logger = logging.getLogger(__name__)
-
 
 def make_repository(base: Repository, name: str, t: ModuleType) -> BaseRepo:
     r = None
@@ -129,6 +127,7 @@ def new_registry(name: str) -> ModuleRegistry:
     return registry
 
 
+# TODO: not in use?
 def load_registry(p: str):
     pp = pathlib.Path(p).resolve()
     sys.path.insert(0, str(pp.parent))  # parent of modules
@@ -137,10 +136,10 @@ def load_registry(p: str):
     return registry.registry
 
 
-def load_registry_plugins(group: str) -> list[ModuleRegistry]:
+def registries(group: str) -> list[ModuleRegistry]:
     groups = []
-    plugins = entry_points(group=group)
-    for ep in plugins:
+    eps = entry_points(group=group)
+    for ep in eps:
         registry = ep.load()
         groups.append(registry)
     return groups

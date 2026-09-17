@@ -17,8 +17,6 @@ app.command(
 )
 app.command("cli.sources.app:sources", group=tools, help="Import sources")
 app.command("cli.health.app:health", group=tools, help="Sanitize results")
-# TODO: would be interesting to have reports.compare instead of this comparator between databases
-# that way we can remove the need for a query? both functionalities can live together
 app.command("cli.report.app:reports", group=reporting, help="Generate reports")
 
 

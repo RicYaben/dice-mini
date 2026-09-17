@@ -92,7 +92,8 @@ class Connector:
         self.model: type[SQLModel] | None = model
 
     def load(self):
-        e = create_engine(f"{self.driver}:///{self.location}")
+        loc = self.location if isinstance(self.location, str) else str(self.location)
+        e = create_engine(f"{self.driver}:///{loc}")
         if self.model:
             self.model.metadata.create_all(e)
 

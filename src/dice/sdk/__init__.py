@@ -2,7 +2,6 @@
 Public interfaces
 """
 
-from dice.modules import new_registry
 from dice.shared import query
 from dice.shared.flags import Flag, Flags, flag
 
@@ -14,6 +13,5 @@ __all__ = [
     "Module",
     "Service",
     "flag",
-    "new_registry",
     "query",
 ]

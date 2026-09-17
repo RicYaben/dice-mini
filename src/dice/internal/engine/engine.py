@@ -30,5 +30,5 @@ class Engine:
         return repo
 
 
-def new_engine(comps: Components) -> Engine:
+def engine(comps: Components) -> Engine:
     return Engine(comps)

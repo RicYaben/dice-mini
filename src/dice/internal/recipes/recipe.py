@@ -5,8 +5,8 @@ from dice.internal.engine import (
     ComponentManager,
     Components,
     Engine,
-    new_engine,
-    plugins,
+    engine,
+    registries,
 )
 from dice.shared.config import ModuleFlags
 from dice.shared.modules import MFACTORY, ModuleType
@@ -74,7 +74,7 @@ class WorkflowBuilder:
             groups = [groups]
 
         for g in groups:
-            if regs := plugins(g):
+            if regs := registries(g):
                 self._desc.requirements.append(g)
                 for r in regs:
                     self._cmanager.register(r)
@@ -83,7 +83,7 @@ class WorkflowBuilder:
     def bake(self) -> Workflow:
         return Workflow(
             desc=self._desc,
-            engine=new_engine(self._desc.components),
+            engine=engine(self._desc.components),
         )
 
     def descriptor(self, desc: Recipe) -> "WorkflowBuilder":

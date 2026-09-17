@@ -1,4 +1,3 @@
-import logging
 import warnings
 from collections.abc import Generator, Sequence
 from typing import overload
@@ -17,8 +16,6 @@ from .health import HealthMonitor
 from .helpers import normalize_data
 
 warnings.simplefilter(action="ignore", category=UserWarning)
-
-logger = logging.getLogger(__name__)
 
 
 class Repository(R):

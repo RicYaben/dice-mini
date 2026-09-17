@@ -120,28 +120,35 @@ class ComponentManager:
     def find(self, modules: list[str] | None = None) -> list[tuple[str, ModuleImpl]]:
         def matches_pattern(full_path_segments: list[str], pattern: str) -> bool:
             pat_segments = pattern.split(".")
+
             if len(pat_segments) == 1:
-                # single segment: match any segment or module
                 return any(
                     fnmatch.fnmatch(seg, pat_segments[0]) for seg in full_path_segments
                 )
-            # multi-segment: check for sub-sequence match
+
             for i in range(len(full_path_segments) - len(pat_segments) + 1):
                 if all(
-                    fnmatch.fnmatch(full_path_segments[i + j], pat_segments[j])
+                    fnmatch.fnmatch(
+                        full_path_segments[i + j],
+                        pat_segments[j],
+                    )
                     for j in range(len(pat_segments))
                 ):
                     return True
+
             return False
 
         def collect(
-            mods: list[str], registry: "ModuleRegistry", path: list[str]
+            mods: list[str],
+            registry: "ModuleRegistry",
+            path: list[str],
         ) -> list[tuple[str, ModuleImpl]]:
+            path = path + [registry.name]
             result = []
-            path.append(registry.name)
 
             for m in registry.modules:
                 fpath_mod = path + [m.desc.name]
+
                 for pattern in mods:
                     if matches_pattern(fpath_mod, pattern):
                         p = ".".join(path)

@@ -97,6 +97,10 @@ def to_sql(stmt) -> str:
     )
 
 
-def query(model: type[Model], fields: list[str] | None = None, **clauses: dict) -> str:
+def query(
+    model: type[Model],
+    fields: list[str] | None = None,
+    **clauses: Any,
+) -> str:
     q = Query(model, fields=fields).where(**clauses)
     return to_sql(build_query(q))
