@@ -1,7 +1,8 @@
+from dataclasses import asdict
 from logging import getLogger
 
-# TODO: move analysis tools to shared `reports` package
-from analysis.tools import new_anonymizer, new_remover
+import ujson
+
 from dice.cli.args import BatchSizeArg, ResultsArg
 from dice.reports import reports
 from dice.results import results
@@ -25,18 +26,9 @@ def report(
     ctx = make_context(opts)
     repo = results(fpath)
 
-    procs = []
-    if rfields := ctx.anonimizer.remove:
-        rm = new_remover(rfields)
-        procs.append(rm.remove)
-
-    if afields := ctx.anonimizer.anonimize:
-        anzr = new_anonymizer(afields, ctx.anonimizer.output)
-        procs.append(anzr.anonymize)
-
     flist = ctx.search.include or []
     if exclude := ctx.search.exclude:
         flist = list(set(flist) - set(exclude))
 
     for r in reports(repo, ctx.search.query, flist, bsize):
-        r = (proc(r) for proc in procs)
+        print(ujson.dumps(asdict(r)))

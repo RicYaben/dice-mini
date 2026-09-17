@@ -16,7 +16,7 @@ from dice.shared.repository import Repository
 
 def reports(
     repo: Repository, query: str | None, fields: list[str], bsize: int | None = None
-) -> Generator[list[Report], None, None]:
+) -> Generator[Report, None, None]:
     """Fetch reports from a repository."""
 
     rfields = ReportFields.from_fields(fields)
@@ -29,7 +29,8 @@ def reports(
 
     stmt = rbuilder.build()
     for res in repo.search(stmt).batch(bsize=bsize):
-        yield [Report.from_mappings(row) for row in res]
+        for row in res:
+            yield Report.from_mappings(row)
 
 
 def compare(
