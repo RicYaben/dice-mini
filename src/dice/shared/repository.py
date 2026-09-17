@@ -86,7 +86,7 @@ def fingerprint(
 
 class BaseRepo[T: DatabaseModel]:
     def __init__(self, repo: Repository, name: str) -> None:
-        self.cache: Cache[T] = Cache(1_000, self.repo.insert)
+        self.cache: Cache[T] = Cache(1_000, repo.insert)
         self.repo = repo
         self.name = name
 
