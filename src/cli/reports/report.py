@@ -1,5 +1,4 @@
 from dataclasses import asdict
-from logging import getLogger
 
 import ujson
 
@@ -8,8 +7,6 @@ from dice.reports import reports
 from dice.results import results
 
 from .context import ReportOptions, make_context
-
-logger = getLogger(__name__)
 
 
 class UnmarshallError(Exception):
