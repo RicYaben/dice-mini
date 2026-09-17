@@ -9,11 +9,11 @@ from sqlalchemy import Connection, Select
 from sqlmodel import Session, text
 
 from dice.internal.database import Connector, insert_or_ignore
-from dice.internal.monitor.health import HealthMonitor
 from dice.shared.interfaces import Repository as R
 from dice.shared.interfaces import T
 from dice.shared.result import SearchResult
 
+from .health import HealthMonitor
 from .helpers import normalize_data
 
 warnings.simplefilter(action="ignore", category=UserWarning)

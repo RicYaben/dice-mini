@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from dice.internal.database import new_connector
-from dice.internal.monitor.health import new_health_monitor
-from dice.internal.monitor.middlewares import add_missing_hosts, resume_cursors
+from dice.internal.results.health import new_health_monitor
+from dice.internal.results.middlewares import add_missing_hosts, resume_cursors
 from dice.internal.results.repository import new_repository
 from dice.shared.interfaces import Repository
 from dice.shared.models import DatabaseModel

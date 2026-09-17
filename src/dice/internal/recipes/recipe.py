@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from importlib.metadata import version
 
-from dice.internal.config import ModuleFlags
 from dice.internal.engine import (
     ComponentManager,
     Components,
@@ -9,6 +8,7 @@ from dice.internal.engine import (
     new_engine,
     plugins,
 )
+from dice.shared.config import ModuleFlags
 from dice.shared.modules import MFACTORY, ModuleType
 from dice.shared.repository import Repository
 from modules import registry
@@ -39,7 +39,6 @@ class Workflow:
     engine: Engine
 
     def start(self, repo: Repository) -> None:
-        # mon = monitor(self.desc.name)
         self.engine.run(repo, self.desc.flags)  # mon)
 
     def dump(self) -> str:
