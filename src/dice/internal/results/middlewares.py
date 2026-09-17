@@ -4,13 +4,13 @@ from sqlmodel import exists, select
 from tqdm import tqdm
 
 from dice.internal.database import insert_or_ignore
-from dice.internal.results.repository import query_batch, query_count
 from dice.internal.sources.resources import new_resourcerer
 from dice.shared.models import Cursor, Host, Record, Resource
 from dice.shared.repository import Repository
 
 from .events import Event
 from .health import HealthCheck
+from .repository import query_batch, query_count
 
 logger = logging.getLogger(__name__)
 

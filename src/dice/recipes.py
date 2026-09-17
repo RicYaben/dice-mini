@@ -1,10 +1,15 @@
 from pathlib import Path
 
-from dice.internal.cookbook import Cookbook, new_cookbook
 from dice.internal.database import new_connector
-from dice.internal.models import CookbookModel
-from dice.internal.recipe import Recipe, WorkflowBuilder, from_recipe, new_builder
-from dice.internal.repository import new_repository
+from dice.internal.recipes.cookbook import Cookbook, new_cookbook
+from dice.internal.recipes.models import CookbookModel
+from dice.internal.recipes.recipe import (
+    Recipe,
+    WorkflowBuilder,
+    from_recipe,
+    new_builder,
+)
+from dice.internal.results.repository import new_repository
 
 
 def workflow() -> WorkflowBuilder:
