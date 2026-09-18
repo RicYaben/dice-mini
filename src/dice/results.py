@@ -5,11 +5,11 @@ from dice.internal.results.health import new_health_monitor
 from dice.internal.results.middlewares import add_missing_hosts, resume_cursors
 from dice.internal.results.repository import new_repository
 from dice.shared.interfaces import Repository
-from dice.shared.models import DatabaseModel
+from dice.shared.models import ResultsModel
 
 
 def results(res: str | Path | None) -> Repository:
-    connector = new_connector(res, DatabaseModel)
+    connector = new_connector(res, ResultsModel)
     repo = new_repository(connector)
 
     init_hc = [resume_cursors(repo)]

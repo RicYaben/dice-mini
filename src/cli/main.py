@@ -1,3 +1,5 @@
+import warnings
+
 import cyclopts
 from cyclopts import Group
 
@@ -24,4 +26,5 @@ app.command("cli.reports.app:reports", group=reporting, help="Generate reports")
 
 
 def main():
+    warnings.filterwarnings("ignore", category=FutureWarning, module="pandas")
     app()

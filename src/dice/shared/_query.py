@@ -2,7 +2,7 @@ from typing import Any
 
 from sqlalchemy.dialects import sqlite
 
-from dice.shared.models import DatabaseModel
+from dice.shared.models import ResultsModel
 
 # TODO: this package has to go!
 # import logging
@@ -88,11 +88,9 @@ def with_clauses(q: str, clauses: dict | None = None) -> str:
     return q.format(clauses=qc)
 
 
-def query(
-    table: DatabaseModel | str, fields: list[str] | None = None, **clauses
-) -> str:
+def query(table: ResultsModel | str, fields: list[str] | None = None, **clauses) -> str:
 
-    if isinstance(table, DatabaseModel):
+    if isinstance(table, ResultsModel):
         table = table.__tablename__
 
     if fields is None:

@@ -3,15 +3,15 @@ from pathlib import Path
 from sqlite3 import IntegrityError
 from typing import Any, Literal
 
-from sqlalchemy import Connection, Engine, Row
+from sqlalchemy import Connection, Engine, Row, event
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, SQLModel, create_engine, insert, select
 
-from dice.shared.models import DatabaseModel
+from dice.shared.models import Model
 
 
 def insert_records(
-    session: Session, model: type[DatabaseModel], records: list[dict]
+    session: Session, model: type[Model], records: list[dict]
 ) -> Sequence[Row]:
     """
     Quickest way to blindly insert thousands of records into a database.
@@ -31,8 +31,8 @@ def insert_records(
 
 def insert_or_ignore(
     session: Session,
-    model: type[DatabaseModel],
-    items: Iterable[DatabaseModel],
+    model: type[Model],
+    items: Iterable[Model],
 ) -> Sequence[Row]:
     items = list(items)
     if not items:
@@ -45,21 +45,15 @@ def insert_or_ignore(
     )
 
     result = session.exec(stmt).all()
-    if result is None:
-        return []
-
     session.commit()
-    session.exec(select(model).execution_options(populate_existing=True))
     return result
 
 
-def get(session: Session, model: type[DatabaseModel], **kwargs) -> DatabaseModel | None:
+def get(session: Session, model: type[Model], **kwargs) -> Model | None:
     return session.exec(select(model).filter_by(**kwargs)).first()
 
 
-def get_or_create(
-    session: Session, model: type[DatabaseModel], **kwargs
-) -> tuple[Any, bool]:
+def get_or_create(session: Session, model: type[Model], **kwargs) -> tuple[Any, bool]:
     # Try to get existing
     obj = get(session, model)
     if obj:
@@ -91,9 +85,21 @@ class Connector:
         self.engine: Engine | None = None
         self.model: type[SQLModel] | None = model
 
-    def load(self):
+    def load(self) -> Engine:
         loc = self.location if isinstance(self.location, str) else str(self.location)
-        e = create_engine(f"{self.driver}:///{loc}")
+
+        e = create_engine(
+            f"{self.driver}:///{loc}",
+            connect_args={"timeout": 30},
+        )
+
+        if self.driver == "sqlite":
+
+            @event.listens_for(e, "connect")
+            def configure_sqlite(dbapi_connection, _):
+                dbapi_connection.execute("PRAGMA journal_mode=WAL")
+                dbapi_connection.execute("PRAGMA busy_timeout=30000")
+
         if self.model:
             self.model.metadata.create_all(e)
 
@@ -101,14 +107,18 @@ class Connector:
         return e
 
     def connection(self) -> Connection:
-        if not self.engine:
-            _ = self.load()
+        if self.engine is None:
+            self.load()
 
         assert self.engine is not None
-        return self.engine.connect()  # type: ignore
+        return self.engine.connect()
 
     def session(self) -> Session:
-        return Session(self.connection())
+        if self.engine is None:
+            self.load()
+
+        assert self.engine is not None
+        return Session(self.engine)
 
 
 def new_connector(

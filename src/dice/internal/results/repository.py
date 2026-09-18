@@ -1,6 +1,5 @@
 import warnings
 from collections.abc import Generator, Sequence
-from typing import overload
 from uuid import uuid4
 
 import pandas as pd
@@ -45,10 +44,7 @@ class Repository(R):
             return
 
         model = type(items[0])
-        if not con:
-            con = self.connect()
-
-        with Session(con) as s:
+        with self.con.session() as s:
             policy(s, model, items)
             s.flush()
 
@@ -95,16 +91,6 @@ class Repository(R):
             d = query_count(q, con, limit)
         gen = self.queryb(q, bsize, norm, limit)
         return (d, gen)
-
-    @overload
-    def search(
-        self, q: str, limit: int | None = None, offset: int | None = None
-    ) -> SearchResult: ...
-
-    @overload
-    def search(
-        self, q: Select, limit: int | None = None, offset: int | None = None
-    ) -> SearchResult: ...
 
     def search(
         self,
