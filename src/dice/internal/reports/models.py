@@ -22,7 +22,7 @@ class ReportFields:
 
     @classmethod
     def from_fields(cls, fields: list[str]) -> "ReportFields":
-        if "all" in fields:
+        if not fields or "all" in fields:
             return cls.all()
 
         return cls(
