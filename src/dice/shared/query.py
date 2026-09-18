@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.dialects import sqlite
@@ -54,7 +54,11 @@ def compile_condition(model, c: Condition):
 
 def parse_condition(key: str, value: Any) -> Condition:
     field, op = key.split("__", 1) if "__" in key else (key, "eq")
-    return Condition(field=field, op=op, value=value)  # type: ignore
+    if op not in _OPERATORS:
+        raise ValueError(f"Unknown operator: {op}")
+
+    op = cast(Op, op)
+    return Condition(field=field, op=op, value=value)
 
 
 @dataclass
@@ -97,6 +101,10 @@ def to_sql(stmt) -> str:
     )
 
 
-def query(model: type[Model], fields: list[str] | None = None, **clauses: dict) -> str:
+def query(
+    model: type[Model],
+    fields: list[str] | None = None,
+    **clauses: Any,
+) -> str:
     q = Query(model, fields=fields).where(**clauses)
     return to_sql(build_query(q))

@@ -40,7 +40,7 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["dice", "dice.*", "modules", "modules.*", "cli", "cli.*", "config", "config.*"]
+include = ["dice", "dice.*", "modules", "modules.*", "cli", "cli.*"]
 exclude = ["analysis", "analysis.*"]
 
 [project.urls]

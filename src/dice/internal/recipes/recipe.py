@@ -1,16 +1,17 @@
 from dataclasses import dataclass, field
 from importlib.metadata import version
 
+from dice.internal.engine import (
+    ComponentManager,
+    Components,
+    Engine,
+    engine,
+    registries,
+)
+from dice.shared.config import ModuleFlags
 from dice.shared.modules import MFACTORY, ModuleType
+from dice.shared.repository import Repository
 from modules import registry
-
-from .components import ComponentManager, Components
-from .config import ModuleFlags
-from .engine import Engine, new_engine
-from .modules import load_registry_plugins
-
-# from .monitor import monitor
-from .repository import Repository
 
 
 @dataclass
@@ -20,7 +21,6 @@ class Recipe:
 
     flags: ModuleFlags
     components: Components
-    # signatures: Signatures
     requirements: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -39,7 +39,6 @@ class Workflow:
     engine: Engine
 
     def start(self, repo: Repository) -> None:
-        # mon = monitor(self.desc.name)
         self.engine.run(repo, self.desc.flags)  # mon)
 
     def dump(self) -> str:
@@ -75,7 +74,7 @@ class WorkflowBuilder:
             groups = [groups]
 
         for g in groups:
-            if regs := load_registry_plugins(g):
+            if regs := registries(g):
                 self._desc.requirements.append(g)
                 for r in regs:
                     self._cmanager.register(r)
@@ -84,7 +83,7 @@ class WorkflowBuilder:
     def bake(self) -> Workflow:
         return Workflow(
             desc=self._desc,
-            engine=new_engine(self._desc.components),
+            engine=engine(self._desc.components),
         )
 
     def descriptor(self, desc: Recipe) -> "WorkflowBuilder":
@@ -122,7 +121,7 @@ def new_builder() -> WorkflowBuilder:
     return WorkflowBuilder()
 
 
-def prepare(desc: Recipe) -> WorkflowBuilder:
+def from_recipe(desc: Recipe) -> WorkflowBuilder:
     return new_builder().descriptor(desc)
 
 

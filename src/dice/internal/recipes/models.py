@@ -7,6 +7,7 @@ class CookbookModel(Model):
     pass
 
 
+# FIXME: this model is inserted in the wrong db, fix
 class RecipeRef(CookbookModel, table=True):
     name: str
     path: str

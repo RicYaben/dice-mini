@@ -2,14 +2,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
-from dice.cli.config.args import token_converter
-from dice.cli.config.models import (
+from dice.cli.args import token_converter
+from dice.cli.models import (
     ConfigOptions,
     DatabaseOptions,
     ModuleOptions,
     Parameter,
 )
-from dice.internal.config import DiceConfig
+from dice.shared.config import DiceConfig
 
 
 @dataclass

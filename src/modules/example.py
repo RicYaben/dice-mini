@@ -20,7 +20,7 @@ def run(repo: CRepo, flags: ExampleFlags, logger: logging.Logger):
         Record,
         clauses=kwargs,
     )
-    for r in repo.query(q):
+    for r in repo.search(q):
         repo.label(r["id"], "label")
 
 

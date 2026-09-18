@@ -5,14 +5,14 @@ from sqlalchemy import Connection
 from sqlmodel import Session, select
 
 from .interfaces import Repository
-from .models import DatabaseModel, Fingerprint, FingerprintLabel, HostTag, Label, Tag
+from .models import Fingerprint, FingerprintLabel, HostTag, Label, ResultsModel, Tag
 from .result import SearchResult
 from .tools import new_fingerprint, new_host_tag
 
-T = TypeVar("T", bound=DatabaseModel)
+T = TypeVar("T", bound=ResultsModel)
 
 
-class Cache[T: DatabaseModel]:
+class Cache[T: ResultsModel]:
     def __init__(self, csize: int, flush_fn: Callable[[list[T]], None]) -> None:
         self.csize = csize
         self.flush_cb = flush_fn
@@ -33,8 +33,8 @@ class Cache[T: DatabaseModel]:
 
     @staticmethod
     def _matches(item: T, query: T) -> bool:
-        for field, value in type(query).model_fields.items():
-            if value is not None and getattr(item, field) != value:
+        for field, value in query.model_dump(exclude_unset=True).items():
+            if getattr(item, field) != value:
                 return False
 
         return True
@@ -43,8 +43,12 @@ class Cache[T: DatabaseModel]:
         self.cache.clear()
 
     def flush(self) -> None:
-        self.flush_cb(self.cache)
-        self.cache.clear()
+        if not self.cache:
+            return
+
+        items = self.cache
+        self.flush_cb(items)
+        self.clear()
 
 
 def label(con: Connection, fp: int, lab: str, cache: Cache) -> FingerprintLabel:
@@ -84,17 +88,19 @@ def fingerprint(
     return new_fingerprint(mod, host, record, data, protocol)
 
 
-class BaseRepo[T: DatabaseModel]:
+class BaseRepo[T: ResultsModel]:
     def __init__(self, repo: Repository, name: str) -> None:
-        self.cache: Cache[T] = Cache(1_000, self.repo.insert)
         self.repo = repo
         self.name = name
+        self.cache = Cache[T](1_000, repo.insert)
+        self.caches: list[Cache] = [self.cache]
 
-    def store(self, *item: T) -> None:
-        self.cache.add(*item)
+    def store(self, *items: T) -> None:
+        self.cache.add(*items)
 
     def flush(self) -> None:
-        self.cache.flush()
+        for cache in self.caches:
+            cache.flush()
 
     def query(self, q: str) -> Generator[dict]:
         return self.repo.query(q)
@@ -110,14 +116,39 @@ class FRepo(BaseRepo[Fingerprint]):
 
 
 class CRepo(BaseRepo[FingerprintLabel]):
+    def __init__(self, repo: Repository, name: str) -> None:
+        super().__init__(repo, name)
+
+        self.label_cache = Cache[Label](100, repo.insert)
+        self.caches.append(self.label_cache)
+
     def label(self, fp: int, lab: str) -> None:
         with self.repo.connect() as con:
-            lb = label(con, fp, lab, cache=self.cache)
-            self.store(lb)
+            lb = label(con, fp, lab, cache=self.label_cache)
+
+        self.store(lb)
 
 
 class TRepo(BaseRepo[HostTag]):
-    def tag(self, host: str, name: str, comment: str | None = None):
+    def __init__(self, repo: Repository, name: str) -> None:
+        super().__init__(repo, name)
+
+        self.tag_cache = Cache[Tag](100, repo.insert)
+        self.caches.append(self.tag_cache)
+
+    def tag(
+        self,
+        host: str,
+        name: str,
+        comment: str | None = None,
+    ) -> None:
         with self.repo.connect() as con:
-            t = tag(con, host, name, cache=self.cache, comment=comment)
-            self.store(t)
+            t = tag(
+                con,
+                host,
+                name,
+                cache=self.tag_cache,
+                comment=comment,
+            )
+
+        self.store(t)

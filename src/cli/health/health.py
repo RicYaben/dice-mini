@@ -1,8 +1,7 @@
-from dice.cli.tools import load_repository
+from dice.cli.args import ResultsArg
+from dice.results import results
 
 
-def health(
-    database: str
-):
-    repo = load_repository(db=database)
-    repo.monitor.sanity_check()
+def health(rdb: ResultsArg | None = None):
+    repo = results(rdb)
+    repo.synchronize()

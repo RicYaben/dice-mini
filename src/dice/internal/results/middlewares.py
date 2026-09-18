@@ -3,13 +3,14 @@ import logging
 from sqlmodel import exists, select
 from tqdm import tqdm
 
+from dice.internal.database import insert_or_ignore
+from dice.internal.sources.resources import new_resourcerer
 from dice.shared.models import Cursor, Host, Record, Resource
+from dice.shared.repository import Repository
 
-from .database import insert_or_ignore
 from .events import Event
 from .health import HealthCheck
-from .repository import Repository, query_batch, query_count
-from .resources import new_resourcerer
+from .repository import query_batch, query_count
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ def add_missing_hosts(repo: Repository) -> HealthCheck:
             add_hosts_from_records_table(repo)
 
     return hc
+
 
 # TODO: health checks should be able to check the configuration, or at least receive more arguments,
 # otherwise I cannot set the bsize properly

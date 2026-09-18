@@ -1,14 +1,37 @@
+import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated
 
 from cyclopts import Parameter
 
-from dice.cli.config.args import ModulesArg
-from dice.cli.config.models import CommandOptions
-from dice.cli.tools import load_repository, writer
-from dice.internal.recipe import new_builder
+from dice.cli.args import ModulesArg
+from dice.cli.models import CommandOptions
+from dice.recipes import workflow
+from dice.results import results
 
 from .context import RecipeContextOptions, configure_context
+
+
+def writer_ctx(output: str | Path | None) -> object:
+    if not output:
+        return nullcontext(sys.stdout)
+    return open(output, "+a")
+
+
+class Writer:
+    def __init__(self, output: str | Path | None):
+        self._ctx = writer_ctx(output)
+
+    def __enter__(self):
+        return self._ctx.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self._ctx.__exit__(exc_type, exc_val, exc_tb)
+
+
+def writer(output: str | Path | None) -> Writer:
+    return Writer(output)
 
 
 def bake(
@@ -32,7 +55,7 @@ def bake(
 ):
     conf = configure_context(opts)
     wf = (
-        new_builder()
+        workflow()
         .registries(conf.modules.registries)
         .components(cmds.resolve(), modules)
         .flags(**conf.modules.flags.root)
@@ -43,5 +66,5 @@ def bake(
         w.write(wf.dump() + "\n")
 
     if run:
-        repo = load_repository(db=conf.databases.results)
-        wf.start(repo)
+        res = results(conf.databases.results)
+        wf.start(res)

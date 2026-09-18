@@ -49,7 +49,7 @@ class ModuleFlags(RootModel[dict[str, dict[str, Any]]]):
         return self
 
     def __getitem__(self, module: str) -> dict[str, Any]:
-        return self.root[module]
+        return self.root.get(module, {})
 
     def __setitem__(self, module: str, values: dict[str, Any]) -> None:
         self.root[module] = values
@@ -69,8 +69,8 @@ class ModulesConf(Config):
 
 
 class DatabasesConf(Config):
-    results: str | None = None
-    cookbook: str | None = None
+    results: Path | None = None
+    cookbook: Path | None = None
 
 
 class LogsConf(Config):

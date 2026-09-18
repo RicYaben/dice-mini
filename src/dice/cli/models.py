@@ -6,7 +6,7 @@ from typing import Annotated
 import ujson
 from cyclopts import Parameter
 
-from dice.internal.config import ModuleFlags, load_flags
+from dice.modules import flags
 from dice.shared.modules import (
     ModuleType,
     filter_module_types,
@@ -21,6 +21,7 @@ from .args import (
     RegistriesArg,
     ResultsArg,
 )
+from .helpers import token_converter
 
 
 @dataclass
@@ -43,7 +44,7 @@ class ConfigOptions:
 @dataclass
 class ModuleOptions:
     registries: RegistriesArg | None = None
-    flags: Annotated[
+    fl: Annotated[
         Path | None,
         Parameter(name=["--flags", "-Mf"], help="Path to module flags file"),
     ] = None
@@ -53,15 +54,14 @@ class ModuleOptions:
     ] = None
 
     def to_dict(self) -> dict:
-        flags = load_flags(self.flags) if self.flags else ModuleFlags({})
-
+        fgs = flags(self.fl)
         if self.params is not None:
             params = ujson.loads(self.params)
-            flags.update_all(**params)
+            fgs.update_all(**params)
 
         return {
             "registries": (self.registries),
-            "flags": flags,
+            "flags": fgs,
         }
 
 
@@ -108,3 +108,40 @@ class CommandOptions:
                 return filter_module_types(self.commands)
             case Mode.normal:
                 return max_module_types(self.commands)
+
+
+@dataclass
+class SearchOptions:
+    query: Annotated[
+        str | None, Parameter(name=["--query", "-q"], help="Search query")
+    ] = None
+    include: Annotated[
+        list[str] | None,
+        Parameter(
+            name=["--include", "-i"],
+            help="Comma-separated list of columns to include",
+            converter=token_converter(","),
+        ),
+    ] = None
+    exclude: Annotated[
+        list[str] | None,
+        Parameter(
+            name=["--exclude", "-e"],
+            help="Comma-separated list of columns to exclude",
+            converter=token_converter(","),
+        ),
+    ] = None
+    limit: Annotated[
+        int | None,
+        Parameter(
+            name=["--limit", "-l"],
+            help="Limit the number of results",
+        ),
+    ] = None
+    offset: Annotated[
+        int | None,
+        Parameter(
+            name=["--offset", "-o"],
+            help="Offset the results",
+        ),
+    ] = None

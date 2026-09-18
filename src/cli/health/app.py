@@ -1,5 +1,6 @@
 from cyclopts import App
 
-health = App(name="health")
+from .health import health as cmd
 
-health.command("cli.health.health:health")
+health = App(name="health")
+health.default(cmd)

@@ -3,12 +3,9 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
-from dice.cli.config.args import BatchSizeArg, ResultsArg
-from dice.cli.tools import load_repository
-from dice.internal.database import get_or_create
-from dice.internal.loaders import walk
-from dice.internal.resources import add_resource
-from dice.shared.models import Source
+from dice.cli.args import BatchSizeArg, ResultsArg
+from dice.results import results
+from dice.sources import source
 
 
 def add(
@@ -22,15 +19,12 @@ def add(
     resume: Annotated[
         bool, Parameter(name=["--resume", "-r"], help="Resume adding a source")
     ] = True,
-    results: ResultsArg | None = None,
+    rdb: ResultsArg | None = None,
     bsize: BatchSizeArg = 50_000,
 ):
     if not name:
         name = fpath.stem
 
-    repo = load_repository(db=results)
-    with repo.session() as s:
-        src, _ = get_or_create(s, Source, name=name)
-
-    for p in walk(fpath):
-        add_resource(repo, src, p, resume=resume, bsize=bsize)
+    res = results(rdb)
+    src = source(res, name)
+    src.add(fpath, bsize, resume)

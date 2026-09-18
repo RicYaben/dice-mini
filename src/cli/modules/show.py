@@ -1,4 +1,4 @@
-from dice.internal.recipe import new_builder
+from dice.recipes import workflow
 
 from .context import Context
 
@@ -8,6 +8,7 @@ def show(
 ) -> None:
     if ctx is None:
         ctx = Context()
-    recipe = new_builder().registries(ctx.registries)
+    recipe = workflow().registries(ctx.registries)
+    # TODO: I do not like this API, would be better to make just a new manager and add the registries
     for mod in recipe._cmanager.get_modules(modules=ctx.modules):
         print(str(mod.desc), "\n")

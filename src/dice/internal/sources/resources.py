@@ -4,17 +4,16 @@ from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
 
-import pandas as pd
-import ujson
+import pandas as pd  # TODO: remove dependancy on pandas
 from sqlalchemy import Connection
 from sqlmodel import Session, col, select
 from tqdm import tqdm
 
+from dice.internal.database import get_or_create
 from dice.shared.models import Cursor, Record, Resource, Source
+from dice.shared.repository import Repository
 
-from .database import get_or_create
 from .loaders import get_loader_normalizer, read_resource
-from .repository import Repository
 
 logger = logging.getLogger(__name__)
 
@@ -112,10 +111,14 @@ class Sourcerer:
     def format_columns(
         self, df: pd.DataFrame, res_id: int, ic: list[str]
     ) -> pd.DataFrame:
-        # convert to int64 numeric cols
-        for col in ic:
-            df[col] = pd.to_numeric(
-                df[col], errors="coerce", dtype_backend="pyarrow", downcast="float"
+        df = df.copy()
+
+        for c in ic:
+            df[c] = pd.to_numeric(
+                df[c],
+                errors="coerce",
+                dtype_backend="pyarrow",
+                downcast="integer",
             )
 
         df["resource_id"] = res_id
@@ -175,7 +178,7 @@ def add_resource(
 
     # load the resource or create it with its cursor
     with repo.session() as s:
-        res, _ = get_or_create(s, Resource, fpath=fpath, source_id=source.id)
+        res, _ = get_or_create(s, Resource, fpath=str(fpath), source_id=source.id)
         cursor, _ = get_or_create(s, Cursor, resource_id=res.id)
         res.cursor = cursor
         s.commit()

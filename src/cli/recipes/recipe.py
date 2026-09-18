@@ -2,8 +2,8 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
-from dice.cli.tools import load_cookbook, load_repository
-from dice.internal.recipe import prepare
+from dice.recipes import cookbook, prepare
+from dice.results import results
 
 from .context import RecipeContextOptions, configure_context
 
@@ -19,7 +19,7 @@ def recipe(
     opts: RecipeContextOptions | None = None,
 ) -> None:
     conf = configure_context(opts)
-    cb = load_cookbook(conf.databases.cookbook)
+    cb = cookbook(conf.databases.cookbook)
     rp = cb.resolve(fpath)
 
     wf = (
@@ -29,5 +29,5 @@ def recipe(
         .bake()
     )
 
-    repo = load_repository(conf.databases.results)
+    repo = results(conf.databases.results)
     wf.start(repo)

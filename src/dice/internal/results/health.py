@@ -30,7 +30,7 @@ class HealthMonitor:
         for check in self._on_synchronize:
             check(e)
 
-    def sanity_check(self):
+    def sanity(self):
         logger.info("checking repo health")
         e = new_event(EventType.SANITY)
         self.synchronize(e)
