@@ -1,11 +1,19 @@
 from collections.abc import Callable, Generator
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from sqlalchemy import Connection
 from sqlmodel import Session, select
 
 from .interfaces import Repository
-from .models import Fingerprint, FingerprintLabel, HostTag, Label, ResultsModel, Tag
+from .models import (
+    Fingerprint,
+    FingerprintLabel,
+    HostTag,
+    Label,
+    ResultsModel,
+    Source,
+    Tag,
+)
 from .result import SearchResult
 from .tools import new_fingerprint, new_host_tag
 
@@ -92,8 +100,20 @@ class BaseRepo[T: ResultsModel]:
     def __init__(self, repo: Repository, name: str) -> None:
         self.repo = repo
         self.name = name
-        self.cache = Cache[T](1_000, repo.insert)
-        self.caches: list[Cache] = [self.cache]
+        self.cache: Cache[T] = Cache[T](1_000, repo.insert)
+        self.caches: list[Cache[Any]] = [self.cache]
+
+    def add_cache[M: ResultsModel](
+        self,
+        max_size: int = 100,
+        flush_fn: Callable[[list[M]], None] | None = None,
+    ) -> Cache[M]:
+        cache: Cache[M] = Cache[M](
+            max_size,
+            flush_fn or self.repo.insert,
+        )
+        self.caches.append(cache)
+        return cache
 
     def store(self, *items: T) -> None:
         self.cache.add(*items)
@@ -118,23 +138,18 @@ class FRepo(BaseRepo[Fingerprint]):
 class CRepo(BaseRepo[FingerprintLabel]):
     def __init__(self, repo: Repository, name: str) -> None:
         super().__init__(repo, name)
-
-        self.label_cache = Cache[Label](100, repo.insert)
-        self.caches.append(self.label_cache)
+        self.label_cache: Cache[Label] = self.add_cache(100)
 
     def label(self, fp: int, lab: str) -> None:
         with self.repo.connect() as con:
             lb = label(con, fp, lab, cache=self.label_cache)
-
         self.store(lb)
 
 
 class TRepo(BaseRepo[HostTag]):
     def __init__(self, repo: Repository, name: str) -> None:
         super().__init__(repo, name)
-
-        self.tag_cache = Cache[Tag](100, repo.insert)
-        self.caches.append(self.tag_cache)
+        self.tag_cache: Cache[Tag] = self.add_cache(100)
 
     def tag(
         self,
@@ -152,3 +167,7 @@ class TRepo(BaseRepo[HostTag]):
             )
 
         self.store(t)
+
+
+class SRepo(BaseRepo[Source]):
+    pass
