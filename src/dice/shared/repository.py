@@ -14,8 +14,8 @@ from .models import (
     Source,
     Tag,
 )
-from .result import SearchResult
 from .tools import new_fingerprint, new_host_tag
+from .view import View
 
 T = TypeVar("T", bound=ResultsModel)
 
@@ -125,7 +125,7 @@ class BaseRepo[T: ResultsModel]:
     def query(self, q: str) -> Generator[dict]:
         return self.repo.query(q)
 
-    def search(self, q: str) -> SearchResult:
+    def search(self, q: str) -> View:
         return self.repo.search(q)
 
 

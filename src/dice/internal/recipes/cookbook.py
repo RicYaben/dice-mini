@@ -7,7 +7,7 @@ from sqlmodel import or_, select
 
 from dice.shared.query import query, to_sql
 from dice.shared.repository import Repository
-from dice.shared.result import SearchResult
+from dice.shared.view import View
 
 from .models import RecipeRef
 from .recipe import Recipe, unmarshal
@@ -55,7 +55,7 @@ class Cookbook:
             path=str(path),
         ), None
 
-    def search(self, recipes: list[str] | None = None) -> SearchResult:
+    def search(self, recipes: list[str] | None = None) -> View:
         patterns = recipes or ["*"]
 
         conditions = [RecipeRef.name.op("GLOB")(pattern) for pattern in patterns]

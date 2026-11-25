@@ -9,7 +9,7 @@ from sqlmodel import Session, text
 from dice.internal.database import Connector, insert_or_ignore
 from dice.shared.interfaces import Repository as R
 from dice.shared.interfaces import T
-from dice.shared.result import SearchResult
+from dice.shared.view import View
 
 from .health import HealthMonitor
 from .helpers import normalize_data
@@ -97,7 +97,7 @@ class Repository(R):
         q: str | Select,
         limit: int | None = None,
         offset: int | None = None,
-    ) -> SearchResult:
+    ) -> View:
         view = f"tmp_{uuid4().hex}"
 
         if isinstance(q, Select):
@@ -126,7 +126,7 @@ class Repository(R):
             con = self.connect()
 
         con.execute(text(f"CREATE TEMP VIEW {view} AS {sql}"))
-        return SearchResult(con, view, self.bsize)
+        return View(con, view, self.bsize)
 
     def synchronize(self) -> None:
         return self.monitor.sanity()
