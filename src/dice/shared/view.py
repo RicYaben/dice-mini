@@ -40,7 +40,8 @@ class Paginator:
         return Page(items, p)
 
     def next(self) -> Page | None:
-        if self.current > self.total:
+        offset = self.current * self.psize
+        if offset >= self.total:
             return
 
         page = self.fetch(self.current)
